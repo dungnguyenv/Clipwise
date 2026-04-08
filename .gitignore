@@ -1,0 +1,21 @@
+# Xcode
+Clipwise.xcodeproj/
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Build
+build/
+DerivedData/
+
+# Release artifacts
+release/*.dmg
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Temporary files
+*.tmp
+*.bak
