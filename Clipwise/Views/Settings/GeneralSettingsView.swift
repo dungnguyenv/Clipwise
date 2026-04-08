@@ -4,6 +4,7 @@ struct GeneralSettingsView: View {
     @AppStorage(Constants.historyLimitKey) private var historyLimit = Constants.defaultHistoryLimit
     @AppStorage(Constants.searchModeKey) private var searchMode = SearchMode.mixed.rawValue
     @AppStorage(Constants.playSoundOnPasteKey) private var playSoundOnPaste = false
+    @AppStorage(Constants.hidePasswordsKey) private var hidePasswords = true
 
     var body: some View {
         Form {
@@ -36,6 +37,7 @@ struct GeneralSettingsView: View {
 
             Section("Behavior") {
                 Toggle("Play sound on paste", isOn: $playSoundOnPaste)
+                Toggle("Hide passwords & secrets", isOn: $hidePasswords)
             }
 
             Section {

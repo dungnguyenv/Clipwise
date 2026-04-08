@@ -3,6 +3,8 @@ import SwiftUI
 struct PreviewPopoverView: View {
     let item: ClipboardItem
 
+    @AppStorage(Constants.hidePasswordsKey) private var hidePasswords = true
+
     /// Max height = 1/3 of screen height
     private var maxHeight: CGFloat {
         let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
@@ -47,7 +49,7 @@ struct PreviewPopoverView: View {
 
     @ViewBuilder
     private var textPreview: some View {
-        if item.looksLikePassword {
+        if hidePasswords && item.looksLikePassword {
             HStack {
                 Image(systemName: "lock.fill")
                     .foregroundStyle(.orange)

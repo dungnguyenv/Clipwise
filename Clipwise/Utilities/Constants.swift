@@ -7,6 +7,7 @@ enum Constants {
     static let searchModeKey = "searchMode"
     static let showDockIconKey = "showDockIcon"
     static let playSoundOnPasteKey = "playSoundOnPaste"
+    static let hidePasswordsKey = "hidePasswords"
     static let popupWidthKey = "popupWidth"
     static let popupHeightKey = "popupHeight"
 

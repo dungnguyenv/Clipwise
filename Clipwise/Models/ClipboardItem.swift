@@ -78,29 +78,42 @@ final class ClipboardItem {
         guard let text = plainText else { return false }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Single-line, no spaces, reasonable length → likely a password/token
+        // Must be single-line, no spaces, reasonable length
         let isSingleLine = !trimmed.contains(where: { $0.isNewline })
         let hasNoSpaces = !trimmed.contains(" ")
         let length = trimmed.count
+        guard length >= 8, length <= 128, isSingleLine, hasNoSpaces else { return false }
 
-        // Too short or too long → not a password
-        guard length >= 8, length <= 128 else { return false }
-        guard isSingleLine, hasNoSpaces else { return false }
+        // Known secret prefixes — always sensitive
+        let secretPrefixes = ["sk-", "pk-", "ghp_", "gho_", "ghs_", "xoxb-", "xoxp-", "eyJ", "AKIA"]
+        if secretPrefixes.contains(where: { trimmed.hasPrefix($0) }) { return true }
 
-        // Check for mixed character classes (letters + digits + symbols)
+        // Exclude common non-password patterns
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") { return false }
+        if lower.hasPrefix("ftp://") || lower.hasPrefix("ssh://") { return false }
+        if lower.hasPrefix("file://") || lower.hasPrefix("mailto:") { return false }
+        if lower.contains("@") && lower.contains(".") { return false } // email
+        if lower.hasPrefix("/") || lower.hasPrefix("~") { return false } // file path
+        if lower.hasSuffix(".com") || lower.hasSuffix(".org") || lower.hasSuffix(".io") ||
+           lower.hasSuffix(".net") || lower.hasSuffix(".dev") || lower.hasSuffix(".app") { return false } // domain
+        if lower.contains("localhost") { return false }
+
+        // Require 3+ character classes AND high entropy (not just a simple word with punctuation)
         let hasUpper = trimmed.contains(where: { $0.isUppercase })
         let hasLower = trimmed.contains(where: { $0.isLowercase })
         let hasDigit = trimmed.contains(where: { $0.isNumber })
         let hasSymbol = trimmed.contains(where: { "!@#$%^&*()_+-=[]{}|;:',.<>?/~`\"\\".contains($0) })
-
         let classCount = [hasUpper, hasLower, hasDigit, hasSymbol].filter { $0 }.count
 
-        // 3+ character classes and no common word patterns → likely password
-        if classCount >= 3 { return true }
-
-        // Common secret prefixes (API keys, tokens)
-        let prefixes = ["sk-", "pk-", "ghp_", "gho_", "xoxb-", "xoxp-", "Bearer ", "eyJ"]
-        if prefixes.contains(where: { trimmed.hasPrefix($0) }) { return true }
+        // Need all 4 classes, or 3 classes with high digit/symbol ratio (random-looking)
+        if classCount >= 4 { return true }
+        if classCount >= 3 {
+            let digitCount = trimmed.filter { $0.isNumber }.count
+            let symbolCount = trimmed.filter { "!@#$%^&*()_+-=[]{}|;:',.<>?/~`\"\\".contains($0) }.count
+            let randomRatio = Double(digitCount + symbolCount) / Double(length)
+            return randomRatio >= 0.3
+        }
 
         return false
     }

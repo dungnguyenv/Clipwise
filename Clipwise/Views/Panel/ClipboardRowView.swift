@@ -5,8 +5,10 @@ struct ClipboardRowView: View {
     let isSelected: Bool
     let isHovering: Bool
 
+    @AppStorage(Constants.hidePasswordsKey) private var hidePasswords = true
+
     private var isSensitive: Bool {
-        item.looksLikePassword
+        hidePasswords && item.looksLikePassword
     }
 
     var body: some View {

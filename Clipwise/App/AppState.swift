@@ -44,6 +44,7 @@ final class AppState {
             Constants.historyLimitKey: Constants.defaultHistoryLimit,
             Constants.searchModeKey: SearchMode.mixed.rawValue,
             Constants.showDockIconKey: true,
+            Constants.hidePasswordsKey: true,
         ])
 
         loadItems()

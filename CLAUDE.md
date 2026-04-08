@@ -26,6 +26,12 @@ No SPM dependencies — the project uses only Apple system frameworks.
 
 No test targets exist yet.
 
+## SwiftData Gotchas
+
+- Changing `@Model` fields (adding/removing `@Attribute(.externalStorage)`, renaming properties) causes `SwiftDataError.loadIssueModelContainer`. `StorageManager` auto-recovers by deleting the old store, but users lose history.
+- Use `context.delete(item)` in a loop (not `context.delete(model:)`) to ensure cascade delete of `ClipboardItemContent` works correctly.
+- Do NOT use `@Attribute(.externalStorage)` on `ClipboardItemContent.value` — causes lazy load issues where `value` returns `nil` when reading back.
+
 ## Architecture
 
 Clipwise is a **macOS clipboard manager** (similar to Maccy). It uses a **hybrid SwiftUI + AppKit** architecture:
@@ -75,3 +81,4 @@ Each clipboard row has a `.popover(arrowEdge: .trailing)` that shows when the it
 ### Password Detection
 
 `ClipboardItem.looksLikePassword` uses heuristics: single-line, no spaces, 8-128 chars, 3+ character classes (upper/lower/digit/symbol), or known API key prefixes (`sk-`, `ghp_`, `eyJ`, etc.). Sensitive items show `••••••••` in the UI but can still be pasted.
+Password detection excludes URLs, emails, file paths, and domains to avoid false positives. Controlled by `hidePasswords` UserDefaults toggle.
