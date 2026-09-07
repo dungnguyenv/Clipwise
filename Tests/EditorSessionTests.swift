@@ -22,6 +22,20 @@ final class EditorSessionTests: XCTestCase {
         return item
     }
 
+    /// A rich-text item as it actually arrives from a real copy — e.g. a browser or
+    /// Pages/Word/Notes selection — carrying both a rich representation and a plain-text
+    /// fallback. `richType` is expected to be `.rtf` or `.html`.
+    private func makeRichTextItem(_ text: String, richType: UTType, in storage: StorageManager) -> ClipboardItem {
+        let item = ClipboardItem(title: text, contentHash: "hash")
+        item.contents = [
+            ClipboardItemContent(type: richType.identifier, value: Data("<rich>".utf8)),
+            ClipboardItemContent(type: UTType.utf8PlainText.identifier, value: Data(text.utf8)),
+        ]
+        storage.context.insert(item)
+        try? storage.context.save()
+        return item
+    }
+
     func testInitReturnsNilForNonEditableItem() {
         let (service, storage) = makeService()
         let item = ClipboardItem(title: "file", contentHash: "hash")
@@ -30,7 +44,42 @@ final class EditorSessionTests: XCTestCase {
         ]
         storage.context.insert(item)
 
+        XCTAssertFalse(item.isEditable, "a file's text form is just its path, not editable content")
         XCTAssertNil(EditorSession(item: item, editService: service))
+    }
+
+    func testRTFItemWithPlainTextIsEditableAndOpensInTextMode() throws {
+        let (service, storage) = makeService()
+        let item = makeRichTextItem("hello", richType: .rtf, in: storage)
+
+        XCTAssertTrue(item.isEditable)
+        let session = try XCTUnwrap(EditorSession(item: item, editService: service))
+        XCTAssertEqual(session.mode, .text)
+        XCTAssertEqual(session.text, "hello")
+    }
+
+    func testHTMLItemWithPlainTextIsEditableAndOpensInTextMode() throws {
+        let (service, storage) = makeService()
+        let item = makeRichTextItem("hello", richType: .html, in: storage)
+
+        XCTAssertTrue(item.isEditable)
+        let session = try XCTUnwrap(EditorSession(item: item, editService: service))
+        XCTAssertEqual(session.mode, .text)
+        XCTAssertEqual(session.text, "hello")
+    }
+
+    func testSavingRichTextItemDropsTheRichRepresentation() throws {
+        let (service, storage) = makeService()
+        let item = makeRichTextItem("before", richType: .rtf, in: storage)
+        let session = try XCTUnwrap(EditorSession(item: item, editService: service))
+
+        session.text = "after"
+        XCTAssertTrue(session.save(.overwrite))
+
+        XCTAssertEqual(item.plainText, "after")
+        XCTAssertFalse(item.contents.contains { $0.type == UTType.rtf.identifier })
+        let types = Set(item.contents.map(\.type))
+        XCTAssertEqual(types, [UTType.utf8PlainText.identifier, UTType.plainText.identifier])
     }
 
     func testTextSessionStartsCleanAndTracksEdits() throws {
@@ -52,20 +101,14 @@ final class EditorSessionTests: XCTestCase {
     func testDetectsRichTextRepresentation() throws {
         let (service, storage) = makeService()
         let item = makeTextItem("hello", in: storage)
-        let session = try XCTUnwrap(EditorSession(item: item, editService: service))
-        XCTAssertFalse(session.hasRichTextRepresentation)
+        let plain = try XCTUnwrap(EditorSession(item: item, editService: service))
+        XCTAssertFalse(plain.hasRichTextRepresentation)
 
-        // Mutate the same item `session` already holds a reference to, rather than
-        // constructing a second `EditorSession` from it: `.rtf` outranks `.text` in
-        // `ContentType.displayPriority`, so once this content is appended,
-        // `item.primaryType` becomes `.rtf` and `EditorSession.init?` — by design,
-        // see its doc comment — would return nil for it. `hasRichTextRepresentation`
-        // is a live computed property over `item.contents`, so the already-open
-        // session picks up the change without needing to reopen.
         item.contents.append(
             ClipboardItemContent(type: UTType.rtf.identifier, value: Data("rtf".utf8))
         )
-        XCTAssertTrue(session.hasRichTextRepresentation)
+        let rich = try XCTUnwrap(EditorSession(item: item, editService: service))
+        XCTAssertTrue(rich.hasRichTextRepresentation)
     }
 
     func testSaveOverwriteWritesThroughToTheItem() throws {

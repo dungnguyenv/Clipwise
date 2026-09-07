@@ -159,9 +159,19 @@ final class ClipboardItem {
 
     // MARK: - Editing
 
-    /// Only text and image items can be opened in the editor (v1).
+    /// Images are editable outright. Anything else is editable when it has a plain-text
+    /// representation and isn't a file item — a file's "text" is just its path, so a file
+    /// item stays non-editable even though `fileURLs` can be turned into a string.
+    ///
+    /// This deliberately does not require `primaryType == .text`: content copied from a
+    /// browser, Pages, Word, or Notes carries HTML or RTF alongside plain text, and
+    /// `primaryType` reports whichever of those ranks highest — never `.text` when either
+    /// is present. Gating on `primaryType == .text` would make most real-world rich text
+    /// impossible to open in the editor, even though `EditorSession` opens it in `.text`
+    /// mode (converting to plain text on save, which is exactly what `TextEditorPane`'s
+    /// rich-text warning banner exists to flag before it happens).
     var isEditable: Bool {
-        primaryType == .text || primaryType == .image
+        primaryType == .image || (primaryType != .fileURL && plainText != nil)
     }
 
     /// Hash for content assembled by the editor rather than read from a pasteboard.

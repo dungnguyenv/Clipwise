@@ -24,8 +24,9 @@ final class EditorSession {
     private let originalText: String
     private let editService: ItemEditService
 
-    /// Returns `nil` when the item is not editable (file URLs, or an image whose
-    /// data failed to decode).
+    /// Returns `nil` when the item is not editable: a file URL, an image whose data
+    /// failed to decode, or an RTF/HTML item with no plain-text representation to fall
+    /// back to.
     init?(item: ClipboardItem, editService: ItemEditService) {
         self.item = item
         self.editService = editService
@@ -38,14 +39,19 @@ final class EditorSession {
             self.text = ""
             self.originalText = ""
 
-        case .text:
-            let existing = item.plainText ?? ""
+        case .text, .rtf, .html:
+            // RTF/HTML items open in plain-text mode: `ClipboardItem.isEditable` admits
+            // them precisely because they usually carry a plain-text representation
+            // alongside the rich one, and that's the representation the editor works
+            // with. `hasRichTextRepresentation` (below) is what warns the user that
+            // saving will drop the rich version.
+            guard let existing = item.plainText else { return nil }
             self.mode = .text
             self.document = nil
             self.text = existing
             self.originalText = existing
 
-        case .fileURL, .rtf, .html:
+        case .fileURL:
             return nil
         }
     }
