@@ -28,6 +28,7 @@ final class AppState {
     let appFilterService: AppFilterService
     let pasteService: PasteService
     let searchEngine: SearchEngine
+    let itemEditService: ItemEditService
 
     init() {
         let storage = StorageManager()
@@ -38,6 +39,7 @@ final class AppState {
         self.clipboardMonitor = ClipboardMonitor(storageManager: storage, appFilterService: filter)
         self.pasteService = PasteService()
         self.searchEngine = SearchEngine()
+        self.itemEditService = ItemEditService(storageManager: storage)
 
         // Register defaults
         UserDefaults.standard.register(defaults: [
@@ -80,6 +82,14 @@ final class AppState {
     }
 
     var onDismissPanel: (() -> Void)?
+    var onOpenEditor: ((ClipboardItem) -> Void)?
+
+    func editItem(at index: Int) {
+        guard index < filteredItems.count else { return }
+        let item = filteredItems[index]
+        guard item.isEditable else { return }
+        onOpenEditor?(item)
+    }
 
     func selectAndPaste() {
         guard !filteredItems.isEmpty, selectedIndex < filteredItems.count else { return }

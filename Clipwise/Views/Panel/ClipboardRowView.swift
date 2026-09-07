@@ -4,6 +4,7 @@ struct ClipboardRowView: View {
     let item: ClipboardItem
     let isSelected: Bool
     let isHovering: Bool
+    var onEdit: (() -> Void)?
 
     @AppStorage(Constants.hidePasswordsKey) private var hidePasswords = true
 
@@ -46,6 +47,18 @@ struct ClipboardRowView: View {
             }
 
             Spacer()
+
+            if item.isEditable, isSelected || isHovering {
+                Button {
+                    onEdit?()
+                } label: {
+                    Image(systemName: "pencil.circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(isSelected ? .white.opacity(0.9) : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Edit")
+            }
 
             if item.isPinned {
                 Image(systemName: "pin.fill")

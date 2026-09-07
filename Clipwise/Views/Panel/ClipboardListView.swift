@@ -14,7 +14,8 @@ struct ClipboardListView: View {
                         ClipboardRowView(
                             item: item,
                             isSelected: index == appState.selectedIndex,
-                            isHovering: appState.hoveredItemID == item.id
+                            isHovering: appState.hoveredItemID == item.id,
+                            onEdit: { appState.editItem(at: index) }
                         )
                         .id(item.id)
                         .onHover { hovering in
@@ -25,6 +26,12 @@ struct ClipboardListView: View {
                             appState.selectAndPaste()
                         }
                         .contextMenu {
+                            if item.isEditable {
+                                Button("Edit") {
+                                    appState.editItem(at: index)
+                                }
+                                Divider()
+                            }
                             Button(item.isPinned ? "Unpin" : "Pin") {
                                 appState.togglePin(at: index)
                             }

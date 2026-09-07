@@ -1,0 +1,108 @@
+import AppKit
+import SwiftUI
+
+/// Owns the editor windows. One window per item, keyed by item id.
+@MainActor
+final class EditorWindowController: NSObject, NSWindowDelegate {
+
+    private struct Entry {
+        let window: NSWindow
+        let session: EditorSession
+    }
+
+    private var entries: [UUID: Entry] = [:]
+    private let appState: AppState
+
+    init(appState: AppState) {
+        self.appState = appState
+    }
+
+    func open(_ item: ClipboardItem) {
+        let itemID = item.id
+
+        if let existing = entries[itemID] {
+            existing.window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        guard let session = EditorSession(item: item, editService: appState.itemEditService) else {
+            // `ClipboardItem.isEditable` is a cheap heuristic (primaryType / plainText
+            // presence) and can say yes for content `EditorSession.init?` then refuses —
+            // e.g. an image whose data fails to decode. Without this alert the user gets
+            // a pencil, clicks it, and nothing happens: no window, no explanation.
+            presentCannotOpenAlert()
+            return
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(
+                x: 0, y: 0,
+                width: Constants.editorWindowWidth,
+                height: Constants.editorWindowHeight
+            ),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+
+        let rootView = EditorRootView(
+            session: session,
+            onFinished: { [weak self, weak window] in
+                self?.appState.loadItems()
+                self?.forceClose(window)
+            },
+            onCancel: { [weak window] in
+                // Goes through the window so windowShouldClose can prompt.
+                window?.performClose(nil)
+            }
+        )
+
+        window.title = session.mode == .image ? "Edit Image" : "Edit Text"
+        window.contentView = NSHostingView(rootView: rootView)
+        window.contentMinSize = NSSize(
+            width: Constants.editorMinWidth,
+            height: Constants.editorMinHeight
+        )
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.center()
+
+        entries[itemID] = Entry(window: window, session: session)
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        entries = entries.filter { $0.value.window !== window }
+    }
+
+    // MARK: - Private
+
+    private func presentCannotOpenAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Can't Open Item"
+        alert.informativeText = "This item's content could not be loaded for editing."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    /// Closes without running the unsaved-changes guard — used after a save, where
+    /// there is nothing left to confirm. Deliberately distinct from routing through
+    /// `window.performClose(nil)` (the `onCancel` path above): `EditorSession` never
+    /// refreshes `originalText`/`hasUnsavedChanges` after a save, so a guard reading
+    /// that state here would (wrongly) think there's still something unsaved. Setting
+    /// `delegate = nil` before `close()` is what skips the guard — Task 10 adds a
+    /// `windowShouldClose` implementation to this delegate that reads `hasUnsavedChanges`,
+    /// and it must never see this close. Don't collapse this into `onCancel`'s path.
+    private func forceClose(_ window: NSWindow?) {
+        guard let window else { return }
+        entries = entries.filter { $0.value.window !== window }
+        window.delegate = nil
+        window.close()
+    }
+}

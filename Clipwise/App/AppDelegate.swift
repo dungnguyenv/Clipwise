@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var floatingPanel: FloatingPanel!
     private var settingsWindow: NSWindow?
+    private var editorWindowController: EditorWindowController!
     var appState: AppState!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -18,6 +19,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appState.onDismissPanel = { [weak self] in
             self?.hidePanel()
+        }
+
+        editorWindowController = EditorWindowController(appState: appState)
+        appState.onOpenEditor = { [weak self] item in
+            guard let self else { return }
+            // FloatingPanel dismisses itself on resignKey, so hide it first and
+            // let the teardown finish — same sequence as opening Settings.
+            self.hidePanel()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                self.editorWindowController.open(item)
+            }
         }
 
         setupStatusItem()
