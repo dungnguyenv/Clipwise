@@ -51,4 +51,11 @@ extension NSImage {
     func pngData() -> Data? {
         bitmapRep?.representation(using: .png, properties: [:])
     }
+
+    /// The backing CGImage at native pixel dimensions.
+    func cgImageAtNativeSize() -> CGImage? {
+        if let cgImage = bitmapRep?.cgImage { return cgImage }
+        var rect = NSRect(origin: .zero, size: size)
+        return cgImage(forProposedRect: &rect, context: nil, hints: nil)
+    }
 }
