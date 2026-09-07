@@ -5,9 +5,14 @@ struct GeneralSettingsView: View {
     @AppStorage(Constants.searchModeKey) private var searchMode = SearchMode.mixed.rawValue
     @AppStorage(Constants.playSoundOnPasteKey) private var playSoundOnPaste = false
     @AppStorage(Constants.hidePasswordsKey) private var hidePasswords = true
+    @State private var launchAtLogin = false
 
     var body: some View {
         Form {
+            Section("Startup") {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+            }
+
             Section("History") {
                 HStack {
                     Text("History size:")
@@ -48,5 +53,16 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear {
+            launchAtLogin = LaunchAtLoginService.isEnabled
+        }
+        .onChange(of: launchAtLogin) { _, newValue in
+            guard newValue != LaunchAtLoginService.isEnabled else { return }
+            do {
+                try LaunchAtLoginService.setEnabled(newValue)
+            } catch {
+                launchAtLogin = LaunchAtLoginService.isEnabled
+            }
+        }
     }
 }
