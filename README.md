@@ -42,12 +42,15 @@ A lightweight, native macOS clipboard manager — inspired by [Maccy](https://ma
 
 ## Build from Source
 
-Requires Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+Requires full Xcode 16+ (Command Line Tools alone is not enough — SwiftData's
+macro plugin ships with Xcode) and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```bash
 brew install xcodegen
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -configuration Release build
+make doctor    # verify the toolchain
+make run       # debug build + launch
+make release   # release build
+make dmg       # package release/Clipwise-<version>.dmg
 ```
 
 ## Tech Stack
