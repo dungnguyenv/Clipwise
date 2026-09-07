@@ -44,6 +44,76 @@ final class AnnotationRendererTests: XCTestCase {
         return (color.redComponent + color.greenComponent + color.blueComponent) / 3
     }
 
+    // MARK: - Orientation
+
+    private enum Quadrant: String {
+        case red, green, blue, yellow, other
+    }
+
+    /// 40x20, quadrants: TL red, TR green, BL blue, BR yellow. Mirrors
+    /// `ImageTransformServiceTests.makeQuadrantImage` — if the export path
+    /// ever flips the base image vertically, this is what would catch it,
+    /// since every other fixture in this file is a solid colour.
+    private func makeQuadrantImage(width: Int = 40, height: Int = 20) -> NSImage {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        for y in 0..<height {
+            for x in 0..<width {
+                let isLeft = x < width / 2
+                let isTop = y < height / 2
+                let color: NSColor
+                switch (isTop, isLeft) {
+                case (true, true):   color = NSColor(deviceRed: 1, green: 0, blue: 0, alpha: 1)
+                case (true, false):  color = NSColor(deviceRed: 0, green: 1, blue: 0, alpha: 1)
+                case (false, true):  color = NSColor(deviceRed: 0, green: 0, blue: 1, alpha: 1)
+                case (false, false): color = NSColor(deviceRed: 1, green: 1, blue: 0, alpha: 1)
+                }
+                rep.setColor(color, atX: x, y: y)
+            }
+        }
+        rep.size = NSSize(width: width, height: height)
+        let image = NSImage(size: rep.size)
+        image.addRepresentation(rep)
+        return image
+    }
+
+    private func quadrant(of image: NSImage, x: Int, y: Int) -> Quadrant {
+        guard let rep = image.bitmapRep,
+              let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+        else { return .other }
+        let r = color.redComponent > 0.5
+        let g = color.greenComponent > 0.5
+        let b = color.blueComponent > 0.5
+        switch (r, g, b) {
+        case (true, false, false): return .red
+        case (false, true, false): return .green
+        case (false, false, true): return .blue
+        case (true, true, false):  return .yellow
+        default: return .other
+        }
+    }
+
+    /// Pins the export path's orientation. Every other fixture in this file is
+    /// a solid colour, so a vertical flip introduced in `flatten` (or in the
+    /// `Canvas`/`ImageRenderer` plumbing it depends on) would pass every other
+    /// test here while silently turning every saved annotated image upside
+    /// down.
+    func testFlattenPreservesBaseImageOrientation() throws {
+        let base = makeQuadrantImage()
+        let output = try XCTUnwrap(AnnotationRenderer.flatten(
+            baseImage: base, pixelatedBase: nil, annotations: [], pixelSize: base.pixelSize
+        ))
+
+        XCTAssertEqual(output.pixelSize, CGSize(width: 40, height: 20))
+        XCTAssertEqual(quadrant(of: output, x: 5, y: 5), .red, "top-left should stay red")
+        XCTAssertEqual(quadrant(of: output, x: 35, y: 5), .green, "top-right should stay green")
+        XCTAssertEqual(quadrant(of: output, x: 5, y: 15), .blue, "bottom-left should stay blue")
+        XCTAssertEqual(quadrant(of: output, x: 35, y: 15), .yellow, "bottom-right should stay yellow")
+    }
+
     func testFlattenWithNoAnnotationsPreservesPixelSize() throws {
         let base = makeSolidImage(width: 40, height: 20, color: .white)
         let output = try XCTUnwrap(AnnotationRenderer.flatten(
