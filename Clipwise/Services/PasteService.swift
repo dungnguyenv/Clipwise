@@ -46,12 +46,30 @@ final class PasteService {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
 
+        // File URLs need to be written as real NSURL objects so macOS registers
+        // the legacy NSFilenamesPboardType / public.url representations that
+        // Chromium-based apps (Microsoft Teams) require to recognize a file paste.
+        let fileURLs = item.fileURLs
+        if !fileURLs.isEmpty {
+            var writers: [NSPasteboardWriting] = fileURLs.map { $0 as NSURL }
+            let markerItem = NSPasteboardItem()
+            markerItem.setData(Data(), forType: ClipboardMonitor.internalMarker)
+            writers.append(markerItem)
+
+            let ok = pasteboard.writeObjects(writers)
+            NSLog("[Clipwise] Writing \(fileURLs.count) file URL(s) to pasteboard: \(ok)")
+            return ok
+        }
+
         let pbItem = NSPasteboardItem()
         pbItem.setData(Data(), forType: ClipboardMonitor.internalMarker)
 
         var typesWritten = 0
         for content in item.contents {
             guard let value = content.value, !value.isEmpty else { continue }
+            // Stale promise types reference the original producing app and
+            // can confuse paste targets if replayed without a live provider.
+            if content.type.hasPrefix("com.apple.pasteboard.promised-file") { continue }
             let type = NSPasteboard.PasteboardType(content.type)
             pbItem.setData(value, forType: type)
             typesWritten += 1
