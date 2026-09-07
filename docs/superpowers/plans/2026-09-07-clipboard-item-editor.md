@@ -21,24 +21,18 @@
 - Run `xcodegen generate` after adding or removing any file, or after editing `project.yml`.
 - Click-to-paste on a row (`ClipboardListView.swift:23-26`) must keep working unchanged. It is the app's primary interaction.
 
-**Build:**
+**Use the Makefile, not bare `xcodebuild`.** It pins `-derivedDataPath build`
+and the ad-hoc signing flags that make local builds work without an Apple
+Developer team; a bare `xcodebuild` writes somewhere else and may fail to sign.
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -configuration Debug build 2>&1 | tail -20
+make build     # xcodegen generate + Debug build
+make test      # xcodegen generate + run ClipwiseTests   (added in Task 1)
+make run       # build, kill the running copy, relaunch
 ```
 
-**Test:**
-
-```bash
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
-```
-
-**Run** (never use Xcode Run when touching paste — rebuilding invalidates the Accessibility grant):
-
-```bash
-open ~/Library/Developer/Xcode/DerivedData/Clipwise-*/Build/Products/Debug/Clipwise.app
-```
+`make run` is the only correct way to launch when paste behaviour matters —
+Xcode's Run button re-signs the binary and macOS revokes the Accessibility grant.
 
 ---
 
@@ -92,7 +86,23 @@ schemes:
         - ClipwiseTests
 ```
 
-- [ ] **Step 2: Stop the real app from booting during tests**
+- [ ] **Step 2: Add a `test` target to the Makefile**
+
+Every later task runs `make test`. Insert it after the `release:` target and add
+`test` to the `.PHONY` line:
+
+```makefile
+## Run the unit test bundle
+test: generate
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=macOS' \
+		-derivedDataPath $(DERIVED_DATA) $(SIGN_FLAGS) test
+```
+
+```makefile
+.PHONY: doctor generate build release test run dmg clean
+```
+
+- [ ] **Step 3: Stop the real app from booting during tests**
 
 The test bundle is hosted by the app, so `applicationDidFinishLaunching` would register global hotkeys and start the 0.5s pasteboard poll while tests run. Guard it. In `Clipwise/App/AppDelegate.swift`, make this the first line of `applicationDidFinishLaunching`:
 
@@ -105,7 +115,7 @@ The test bundle is hosted by the app, so `applicationDidFinishLaunching` would r
         appState = AppState()
 ```
 
-- [ ] **Step 3: Move the content size cap into `Constants`**
+- [ ] **Step 4: Move the content size cap into `Constants`**
 
 In `Clipwise/Utilities/Constants.swift`, add below `pollingInterval`:
 
@@ -127,7 +137,7 @@ and change the guard in `processPasteboardItems` from `Self.maxContentSize` to:
                 guard data.count < Constants.maxContentSize else { continue }
 ```
 
-- [ ] **Step 4: Write the failing tests**
+- [ ] **Step 5: Write the failing tests**
 
 Create `Tests/ClipboardItemTests.swift`:
 
@@ -178,16 +188,15 @@ final class ClipboardItemTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 5: Regenerate the project and run the tests to verify they fail**
+- [ ] **Step 6: Regenerate the project and run the tests to verify they fail**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: compile failure — `type 'ClipboardItem' has no member 'generateTitle(forText:)'` and no matching `generateHash` overload.
 
-- [ ] **Step 6: Implement the helpers**
+- [ ] **Step 7: Implement the helpers**
 
 In `Clipwise/Models/ClipboardItem.swift`, add a new section after the `// MARK: - Hash Generation` block's existing functions:
 
@@ -219,18 +228,18 @@ In `Clipwise/Models/ClipboardItem.swift`, add a new section after the `// MARK: 
     }
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [ ] **Step 8: Run the tests to verify they pass**
 
 ```bash
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: `** TEST SUCCEEDED **`, 6 tests passing.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add project.yml Tests/ClipboardItemTests.swift Clipwise/Utilities/Constants.swift \
+git add project.yml Makefile Tests/ClipboardItemTests.swift Clipwise/Utilities/Constants.swift \
         Clipwise/Services/ClipboardMonitor.swift Clipwise/Models/ClipboardItem.swift \
         Clipwise/App/AppDelegate.swift Clipwise.xcodeproj
 git commit -m "test: add ClipwiseTests target and ClipboardItem editing helpers"
@@ -452,8 +461,7 @@ final class ItemEditServiceTests: XCTestCase {
 - [ ] **Step 4: Run tests to verify they fail**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: compile failure — `cannot find 'ItemEditService' in scope`.
@@ -585,8 +593,7 @@ final class ItemEditService {
 - [ ] **Step 6: Run tests to verify they pass**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: `** TEST SUCCEEDED **`, 8 new tests passing.
@@ -758,8 +765,7 @@ final class ImageTransformServiceTests: XCTestCase {
 - [ ] **Step 3: Run tests to verify they fail**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: compile failure — `cannot find 'ImageTransformService' in scope`.
@@ -892,8 +898,7 @@ enum ImageTransformService {
 - [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: `** TEST SUCCEEDED **`, 8 new tests passing.
@@ -1045,8 +1050,7 @@ final class AnnotationRendererTests: XCTestCase {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: compile failure — `cannot find 'ImageAnnotation' in scope`.
@@ -1326,8 +1330,7 @@ private struct FlattenedImageView: View {
 - [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: `** TEST SUCCEEDED **`, 5 new tests passing.
@@ -1500,8 +1503,7 @@ final class ImageEditorDocumentTests: XCTestCase {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: compile failure — `cannot find 'ImageEditorDocument' in scope`.
@@ -1616,8 +1618,7 @@ final class ImageEditorDocument {
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: `** TEST SUCCEEDED **`, 9 new tests passing.
@@ -1752,8 +1753,7 @@ final class EditorSessionTests: XCTestCase {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: compile failure — `cannot find 'EditorSession' in scope`.
@@ -2021,8 +2021,7 @@ struct EditorRootView: View {
 - [ ] **Step 9: Run tests to verify they pass**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: `** TEST SUCCEEDED **`, 5 new tests passing.
@@ -2291,10 +2290,8 @@ In `Clipwise/Views/Panel/PanelContentView.swift`, add to the `SearchFieldView` c
 - [ ] **Step 7: Build and run the app**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -configuration Debug build 2>&1 | tail -5
-open ~/Library/Developer/Xcode/DerivedData/Clipwise-*/Build/Products/Debug/Clipwise.app
+make test
+make run
 ```
 
 Expected: all existing tests still pass, build succeeds.
@@ -2418,8 +2415,7 @@ final class ImageCanvasGeometryTests: XCTestCase {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: compile failure — `cannot find 'ImageCanvasView' in scope`.
@@ -2661,8 +2657,7 @@ struct ImageEditorPane: View {
 - [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
+make test
 ```
 
 Expected: `** TEST SUCCEEDED **`, 6 new tests passing.
@@ -2670,8 +2665,7 @@ Expected: `** TEST SUCCEEDED **`, 6 new tests passing.
 - [ ] **Step 6: Verify manually**
 
 ```bash
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -configuration Debug build 2>&1 | tail -5
-open ~/Library/Developer/Xcode/DerivedData/Clipwise-*/Build/Products/Debug/Clipwise.app
+make run
 ```
 
 1. Copy a screenshot, open its editor, drag across the image → a red line follows the pointer.
@@ -2949,10 +2943,8 @@ struct ImageEditorPane: View {
 - [ ] **Step 3: Build, test, and run**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -configuration Debug build 2>&1 | tail -5
-open ~/Library/Developer/Xcode/DerivedData/Clipwise-*/Build/Products/Debug/Clipwise.app
+make test
+make run
 ```
 
 Expected: all tests still pass, build succeeds.
@@ -3035,10 +3027,8 @@ A failed save returns `false` so the window stays open and the `EditorRootView` 
 - [ ] **Step 2: Build and run**
 
 ```bash
-xcodegen generate
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -destination 'platform=macOS' test 2>&1 | tail -30
-xcodebuild -project Clipwise.xcodeproj -scheme Clipwise -configuration Debug build 2>&1 | tail -5
-open ~/Library/Developer/Xcode/DerivedData/Clipwise-*/Build/Products/Debug/Clipwise.app
+make test
+make run
 ```
 
 - [ ] **Step 3: Verify the guard**
