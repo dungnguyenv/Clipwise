@@ -66,11 +66,20 @@ final class FloatingPanel: NSPanel {
         dismiss()
     }
 
-    /// Matches Command-E with no other modifiers, so ⌘⇧E / ⌘⌃E etc. pass through
-    /// untouched. Returning `true` claims the event outright; returning `false` (via
-    /// `super`) lets normal key-equivalent dispatch continue for everything else.
+    /// The four modifier keys that make a shortcut a different shortcut. Deliberately
+    /// narrower than `.deviceIndependentFlagsMask`, which also includes `.capsLock`:
+    /// intersecting against the full mask makes Caps Lock silently defeat the `==
+    /// .command` match below (engaged, the intersection becomes `[.command,
+    /// .capsLock]`), so ⌘E would stop working with no visible cause the moment a user
+    /// has Caps Lock on.
+    private static let relevantModifiers: NSEvent.ModifierFlags = [.command, .shift, .control, .option]
+
+    /// Matches Command-E with no other *relevant* modifiers (see `relevantModifiers`),
+    /// so ⌘⇧E / ⌘⌃E etc. pass through untouched, and Caps Lock doesn't matter either
+    /// way. Returning `true` claims the event outright; returning `false` (via `super`)
+    /// lets normal key-equivalent dispatch continue for everything else.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+        if event.modifierFlags.intersection(Self.relevantModifiers) == .command,
            event.charactersIgnoringModifiers?.lowercased() == "e" {
             onEdit?()
             return true

@@ -179,9 +179,24 @@ final class ClipboardItem {
     /// editability from it would make this silently wrong if that ranking is ever
     /// reordered for a display-only reason.
     var isEditable: Bool {
+        Self.isEditable(primaryType: primaryType, isFileItem: isFileItem, hasPlainText: plainText != nil)
+    }
+
+    /// Pure decision behind `isEditable`, over the three inputs it actually depends on.
+    /// `isEditable` itself can never exercise the `isFileItem == true` /
+    /// `primaryType == .image` combination against a real `ClipboardItem`:
+    /// `ContentType.displayPriority` currently ranks `.fileURL` above every other case,
+    /// so any item that is a file item also has `primaryType == .fileURL`, never
+    /// `.image` — that combination of inputs is simply unreachable through `contents`.
+    /// Exposed as a static function precisely so a test can supply that unreachable
+    /// combination directly and pin that the file guard runs first regardless — the
+    /// thing no test built from a real item can demonstrate, because every real item
+    /// that could reach the `primaryType == .image` branch already has `isFileItem ==
+    /// false` by construction.
+    static func isEditable(primaryType: ContentType, isFileItem: Bool, hasPlainText: Bool) -> Bool {
         guard !isFileItem else { return false }
         if primaryType == .image { return true }
-        return plainText != nil
+        return hasPlainText
     }
 
     /// True when the item carries a file-URL representation. Kept separate from
