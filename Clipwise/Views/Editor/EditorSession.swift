@@ -63,11 +63,26 @@ final class EditorSession {
         }
     }
 
-    /// True when the item carries RTF or HTML that a text save will discard.
+    /// True when the item carries a representation that a text save
+    /// (`ItemEditService.save(text:...)`) will not write back — RTF, HTML, and formats
+    /// that don't even classify under `ContentType` (RTFD/flat-RTFD, webarchive) all
+    /// qualify.
+    ///
+    /// Checked by conformance to `.plainText` rather than by matching `.rtf`/`.html`
+    /// specifically. Matching those two only would miss e.g. `com.apple.rtfd` or
+    /// `com.apple.webarchive` — neither conforms to `.rtf` or `.html`, so
+    /// `ContentType.classify` returns `nil` for them and `primaryType` falls through to
+    /// `.text` — which is exactly the case where losing them silently would hurt most:
+    /// TextEdit/Notes items with an inline attachment, or a full webarchive copy, open
+    /// with no warning and a save would destroy the formatted version outright.
+    /// Conformance to `.plainText` also correctly excludes legacy plain-text aliases
+    /// (e.g. `com.apple.traditional-mac-plain-text`), which do conform and are exactly
+    /// what a text save preserves — matching identifiers instead of conformance here
+    /// would have raised a false banner for those.
     var hasRichTextRepresentation: Bool {
         item.contents.contains { content in
             guard let type = UTType(content.type) else { return false }
-            return type.conforms(to: .rtf) || type.conforms(to: .html)
+            return !type.conforms(to: .plainText)
         }
     }
 
@@ -87,12 +102,10 @@ final class EditorSession {
             }
             return true
         } catch {
-            // `ItemEditService.apply` already mutated `item` (or inserted the
-            // copy) before the save that just failed. Roll back so the in-memory
-            // model matches what's actually on disk — otherwise the clipboard
-            // panel behind this window would show the new title/content for an
-            // edit that never persisted.
-            editService.rollback()
+            // `ItemEditService.apply` rolls back its own mutation before rethrowing
+            // `EditError.saveFailed`, so the in-memory `item` is already back in sync
+            // with what's actually on disk by the time we get here — nothing else to
+            // undo at this layer.
             errorMessage = error.localizedDescription
             return false
         }

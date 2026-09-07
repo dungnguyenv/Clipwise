@@ -42,16 +42,12 @@ final class ItemEditService {
         self.storageManager = storageManager
     }
 
-    /// Discards uncommitted in-memory changes.
-    ///
-    /// `apply(...)` mutates the item (or inserts the copy) *before* calling
-    /// `context.save()`, and does not undo that mutation when the save throws
-    /// `EditError.saveFailed`. A caller that needs the model to stay consistent
-    /// with what is actually on disk — `EditorSession.save`, so the clipboard
-    /// panel behind the editor window never shows an edit that didn't persist —
-    /// should call this from its `catch`. Exposed here rather than handing out
-    /// the underlying `ModelContext` so callers don't need to know SwiftData is
-    /// the storage mechanism.
+    /// Discards uncommitted in-memory changes. `apply(...)` calls this itself when
+    /// `context.save()` throws — see its doc comment — so callers of `save(text:...)` /
+    /// `save(image:...)` don't need to remember to call it. Exposed as public API in case
+    /// a future caller needs to discard uncommitted state outside a failed save, without
+    /// needing to know SwiftData is the storage mechanism (this wraps `ModelContext`
+    /// rather than handing it out).
     func rollback() {
         storageManager.context.rollback()
     }
@@ -128,6 +124,13 @@ final class ItemEditService {
         do {
             try storageManager.context.save()
         } catch {
+            // The mutation above (or the inserted copy) is now uncommitted and
+            // inconsistent with disk — undo it here, at the mutation site, rather than
+            // leaving every caller of `save(text:...)`/`save(image:...)` responsible for
+            // remembering to. `.tooLarge`/`.encodingFailed` never reach this catch (both
+            // throw before any mutation), so this only ever undoes a mutation that
+            // actually happened.
+            storageManager.context.rollback()
             throw EditError.saveFailed(error)
         }
         return target

@@ -5,10 +5,19 @@ struct EditorFooterBar: View {
     var onFinished: () -> Void
     var onCancel: () -> Void
 
+    /// Above this many UTF-8 bytes, the character/line counter is skipped rather than
+    /// recomputed on every keystroke. `session.text` can be as large as
+    /// `Constants.maxContentSize` (~10 MB); counting characters and lines is O(n), and
+    /// recomputing that on every render at that scale would visibly stutter typing.
+    /// `utf8.count` is the cheap pre-check — a native Swift `String` tracks its UTF-8
+    /// byte count directly, so reading it doesn't itself walk the string — used to decide
+    /// whether the O(n) pass below is worth paying for.
+    private static let statsByteLimit = 100_000
+
     var body: some View {
         HStack(spacing: 10) {
-            if session.mode == .text {
-                Text("\(session.text.count) characters · \(lineCount) lines")
+            if session.mode == .text, let stats {
+                Text(stats)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -33,7 +42,20 @@ struct EditorFooterBar: View {
         .padding(.vertical, 10)
     }
 
-    private var lineCount: Int {
-        max(1, session.text.components(separatedBy: .newlines).count)
+    /// `nil` above `statsByteLimit` — the counter is omitted entirely rather than shown
+    /// stale or computed expensively.
+    private var stats: String? {
+        let text = session.text
+        guard text.utf8.count <= Self.statsByteLimit else { return nil }
+
+        // Single pass over `Character`s, no intermediate array: unlike
+        // `text.components(separatedBy: .newlines).count`, this allocates nothing.
+        var characters = 0
+        var newlines = 0
+        for character in text {
+            characters += 1
+            if character.isNewline { newlines += 1 }
+        }
+        return "\(characters) characters · \(newlines + 1) lines"
     }
 }

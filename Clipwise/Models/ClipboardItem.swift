@@ -159,9 +159,10 @@ final class ClipboardItem {
 
     // MARK: - Editing
 
-    /// Images are editable outright. Anything else is editable when it has a plain-text
-    /// representation and isn't a file item — a file's "text" is just its path, so a file
-    /// item stays non-editable even though `fileURLs` can be turned into a string.
+    /// Images are editable outright. Everything else is editable when it has a plain-text
+    /// representation to edit — except file items, which are never editable regardless of
+    /// what else they carry: a file's "text" is just its path (see `fileURLs`), and a
+    /// plain-text-encoded copy of that path isn't editable content either.
     ///
     /// This deliberately does not require `primaryType == .text`: content copied from a
     /// browser, Pages, Word, or Notes carries HTML or RTF alongside plain text, and
@@ -170,8 +171,24 @@ final class ClipboardItem {
     /// impossible to open in the editor, even though `EditorSession` opens it in `.text`
     /// mode (converting to plain text on save, which is exactly what `TextEditorPane`'s
     /// rich-text warning banner exists to flag before it happens).
+    ///
+    /// The file exclusion is checked directly against `contents` (`isFileItem`) rather
+    /// than inferred from `primaryType != .fileURL`. `ContentType.displayPriority` — the
+    /// thing that currently makes `.fileURL` outrank every other type in `primaryType` —
+    /// is documented as a *display* preference, not an editability rule; deriving
+    /// editability from it would make this silently wrong if that ranking is ever
+    /// reordered for a display-only reason.
     var isEditable: Bool {
-        primaryType == .image || (primaryType != .fileURL && plainText != nil)
+        if primaryType == .image { return true }
+        guard !isFileItem else { return false }
+        return plainText != nil
+    }
+
+    /// True when the item carries a file-URL representation. Kept separate from
+    /// `primaryType` so `isEditable`'s file exclusion doesn't depend on
+    /// `ContentType.displayPriority` ordering — see `isEditable`'s doc comment.
+    private var isFileItem: Bool {
+        contents.contains { $0.type == UTType.fileURL.identifier }
     }
 
     /// Hash for content assembled by the editor rather than read from a pasteboard.
