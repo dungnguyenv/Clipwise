@@ -63,26 +63,26 @@ final class EditorSession {
         }
     }
 
-    /// True when the item carries a representation that a text save
-    /// (`ItemEditService.save(text:...)`) will not write back — RTF, HTML, and formats
-    /// that don't even classify under `ContentType` (RTFD/flat-RTFD, webarchive) all
-    /// qualify.
-    ///
-    /// Checked by conformance to `.plainText` rather than by matching `.rtf`/`.html`
-    /// specifically. Matching those two only would miss e.g. `com.apple.rtfd` or
-    /// `com.apple.webarchive` — neither conforms to `.rtf` or `.html`, so
-    /// `ContentType.classify` returns `nil` for them and `primaryType` falls through to
-    /// `.text` — which is exactly the case where losing them silently would hurt most:
-    /// TextEdit/Notes items with an inline attachment, or a full webarchive copy, open
-    /// with no warning and a save would destroy the formatted version outright.
-    /// Conformance to `.plainText` also correctly excludes legacy plain-text aliases
-    /// (e.g. `com.apple.traditional-mac-plain-text`), which do conform and are exactly
-    /// what a text save preserves — matching identifiers instead of conformance here
-    /// would have raised a false banner for those.
+    /// Formats a text save (`ItemEditService.save(text:...)`) discards. Deliberately an
+    /// explicit set, not everything that fails to conform to `.plainText` — that broader
+    /// check also caught `public.url` and `public.vcard` (an ordinary link or contact
+    /// copy), which have no formatted version to lose and put a "formatted version
+    /// discarded" banner on some of the most common things anyone copies. A false-alarm
+    /// banner is worse than the narrow, drift-prone set below: readers stop trusting it.
+    /// If you're tempted to simplify this back to a `.plainText` conformance check,
+    /// don't — that's the bug this set fixes. A genuinely new rich-text format does need
+    /// adding here by hand; that's a conscious, bounded trade against crying wolf on
+    /// every link copy.
+    private static let richTextTypes: [UTType] = [.rtf, .rtfd, .flatRTFD, .html, .webArchive]
+
+    /// True when the item carries a representation matching `richTextTypes` — checked by
+    /// conformance, not exact-type equality, so vendor-specific subtypes of those five
+    /// formats are still caught (that's the value conformance adds over a plain identifier
+    /// list), while `public.url`, `public.vcard`, images, and arbitrary metadata stay out.
     var hasRichTextRepresentation: Bool {
         item.contents.contains { content in
             guard let type = UTType(content.type) else { return false }
-            return !type.conforms(to: .plainText)
+            return Self.richTextTypes.contains { type.conforms(to: $0) }
         }
     }
 

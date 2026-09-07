@@ -142,11 +142,11 @@ final class EditorSessionTests: XCTestCase {
 
     func testRTFDRepresentationTriggersTheBannerEvenThoughItDoesNotClassify() throws {
         let (service, storage) = makeService()
-        // "com.apple.rtfd" (and "com.apple.flat-rtfd", "com.apple.webarchive") conform to
-        // neither `.rtf` nor `.html`, so `ContentType.classify` returns nil for them and
-        // `primaryType` falls through to `.text` — this is the TextEdit/Notes-inline-
-        // attachment case the banner must still catch.
-        let item = makeRichTextItem("hello", richTypeIdentifier: "com.apple.rtfd", in: storage)
+        // RTFD (and flat-RTFD, webarchive) conform to neither `.rtf` nor `.html`, so
+        // `ContentType.classify` returns nil for them and `primaryType` falls through to
+        // `.text` — this is the TextEdit/Notes-inline-attachment case the banner must
+        // still catch.
+        let item = makeRichTextItem("hello", richTypeIdentifier: UTType.rtfd.identifier, in: storage)
         XCTAssertEqual(item.primaryType, .text, "rtfd doesn't classify, so plain text is still primary")
 
         let session = try XCTUnwrap(EditorSession(item: item, editService: service))
@@ -162,6 +162,30 @@ final class EditorSessionTests: XCTestCase {
         ]
         storage.context.insert(item)
         try? storage.context.save()
+
+        let session = try XCTUnwrap(EditorSession(item: item, editService: service))
+        XCTAssertFalse(session.hasRichTextRepresentation)
+    }
+
+    func testURLRepresentationDoesNotTriggerTheBanner() throws {
+        let (service, storage) = makeService()
+        // The standard macOS link-copy shape: `public.url` alongside plain text. A URL
+        // has no formatted version to lose — this is the case that regressed when the
+        // banner was briefly based on `.plainText` conformance instead of an explicit
+        // rich-text set.
+        let item = makeRichTextItem(
+            "https://example.com", richTypeIdentifier: UTType.url.identifier, in: storage
+        )
+
+        let session = try XCTUnwrap(EditorSession(item: item, editService: service))
+        XCTAssertFalse(session.hasRichTextRepresentation)
+    }
+
+    func testVCardRepresentationDoesNotTriggerTheBanner() throws {
+        let (service, storage) = makeService()
+        let item = makeRichTextItem(
+            "BEGIN:VCARD\nEND:VCARD", richTypeIdentifier: UTType.vCard.identifier, in: storage
+        )
 
         let session = try XCTUnwrap(EditorSession(item: item, editService: service))
         XCTAssertFalse(session.hasRichTextRepresentation)
