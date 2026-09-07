@@ -106,10 +106,19 @@ enum AnnotationRenderer {
         let style = StrokeStyle(lineWidth: annotation.lineWidth, lineCap: .round, lineJoin: .round)
 
         if highlight {
-            context.drawLayer { layer in
-                layer.blendMode = .multiply
-                layer.stroke(path, with: shading, style: style)
-            }
+            // `drawLayer` starts its callback with a fresh, fully transparent
+            // backdrop — not a view onto what's already drawn in `context`.
+            // Setting `blendMode` *inside* that layer would blend the stroke
+            // against that empty backdrop, which is a no-op (multiplying
+            // against nothing just keeps the source colour), and the layer
+            // is then composited back onto `context` with a normal blend
+            // regardless. Set the blend mode directly on `context` instead,
+            // around the stroke, so it blends against the base image and any
+            // annotations already drawn beneath it.
+            let previousBlendMode = context.blendMode
+            context.blendMode = .multiply
+            context.stroke(path, with: shading, style: style)
+            context.blendMode = previousBlendMode
         } else {
             context.stroke(path, with: shading, style: style)
         }

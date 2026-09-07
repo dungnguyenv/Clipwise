@@ -181,6 +181,44 @@ final class AnnotationRendererTests: XCTestCase {
         XCTAssertGreaterThan(offLine, 0.8)
     }
 
+    /// Settles a question left open since Task 4's review: `drawStroke` sets
+    /// `blendMode = .multiply` *inside* `drawLayer`, whose backdrop is a fresh,
+    /// empty (fully transparent) image — not the base image already drawn in
+    /// the outer context. Blending the stroke against nothing may make the
+    /// multiply inert, silently reducing the highlighter to a plain
+    /// 35%-alpha stroke.
+    ///
+    /// This is decidable without a GUI: multiply can never lighten a pixel —
+    /// each output channel is at most `min(backdrop, source)` — whereas a
+    /// plain alpha blend of a light colour over a dark background does
+    /// lighten it (a 35%-opacity yellow over near-black is well above the
+    /// background's brightness). So flatten a highlighter stroke over a dark
+    /// region and check whether the result got brighter.
+    func testHighlighterStrokeDoesNotLightenADarkBackground() throws {
+        let backgroundColor = NSColor(deviceRed: 0.05, green: 0.05, blue: 0.05, alpha: 1)
+        let base = makeSolidImage(width: 40, height: 20, color: backgroundColor)
+        let highlighterColor = NSColor(deviceRed: 1, green: 1, blue: 0, alpha: 1)
+        let stroke = ImageAnnotation(
+            kind: .stroke(points: [CGPoint(x: 0, y: 10), CGPoint(x: 40, y: 10)], highlight: true),
+            color: Color(nsColor: highlighterColor),
+            lineWidth: 10
+        )
+
+        let output = try XCTUnwrap(AnnotationRenderer.flatten(
+            baseImage: base, pixelatedBase: nil, annotations: [stroke], pixelSize: base.pixelSize
+        ))
+
+        let backgroundBrightness = try XCTUnwrap(brightness(of: base, x: 20, y: 1))
+        let onStrokeBrightness = try XCTUnwrap(brightness(of: output, x: 20, y: 10))
+
+        XCTAssertLessThanOrEqual(
+            onStrokeBrightness, backgroundBrightness + 0.02,
+            "a multiply blend can only darken or preserve a dark background — " +
+                "if this fails, the highlighter's multiply blend mode is inert and it is " +
+                "rendering as a plain translucent stroke instead"
+        )
+    }
+
     func testEditorToolCasesAllHaveIcons() {
         for tool in EditorTool.allCases {
             XCTAssertFalse(tool.systemImage.isEmpty, "\(tool.rawValue) needs an icon")

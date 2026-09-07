@@ -11,6 +11,13 @@ enum ImageTransformService {
     static func crop(_ image: NSImage, to rect: CGRect) -> NSImage? {
         guard let cgImage = image.cgImageAtNativeSize() else { return nil }
         let bounds = CGRect(x: 0, y: 0, width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
+        // `.integral` floors the origin and ceils the far edge, so a fractional
+        // crop rect — which a drag will always produce — yields a crop that
+        // always *contains* the requested region, up to about two pixels
+        // larger. That is the right contract for a crop drag: the user should
+        // never lose part of what they dragged over to rounding. Do not
+        // "fix" this into rounding-to-nearest — that would shift every crop
+        // by up to half a pixel in either direction instead.
         let target = rect.integral.intersection(bounds)
         guard !target.isNull, target.width >= 1, target.height >= 1 else { return nil }
 
@@ -56,6 +63,12 @@ enum ImageTransformService {
     }
 
     static func resize(_ image: NSImage, to size: CGSize) -> NSImage? {
+        // `Int(_:)` traps on a non-finite `Double`. A caller-supplied size can
+        // be infinite or NaN (e.g. a resize field parsing "1e400"), so this
+        // must be checked before converting rather than trusting callers to
+        // have done it — every caller of this service-level function relies
+        // on it being safe.
+        guard size.width.isFinite, size.height.isFinite else { return nil }
         guard let cgImage = image.cgImageAtNativeSize() else { return nil }
         let width = Int(size.width.rounded())
         let height = Int(size.height.rounded())

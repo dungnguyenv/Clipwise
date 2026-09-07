@@ -110,4 +110,28 @@ final class ImageTransformServiceTests: XCTestCase {
         let pixelated = try XCTUnwrap(ImageTransformService.pixelated(makeQuadrantImage()))
         XCTAssertEqual(pixelated.pixelSize, CGSize(width: 40, height: 20))
     }
+
+    /// `Int(_:)` traps on a non-finite `Double`. A resize sheet that parses
+    /// user-typed strings can hand this an infinite size (`Double("1e400")`
+    /// yields `.infinity`, which passes a naive `>= 1` check) or a NaN one —
+    /// both must return `nil` rather than crash, since the guard belongs at
+    /// the service level, not only in whichever caller remembers to check.
+    func testResizeRejectsInfiniteSizeInsteadOfTrapping() {
+        XCTAssertNil(
+            ImageTransformService.resize(
+                makeQuadrantImage(), to: CGSize(width: CGFloat.infinity, height: 40)
+            )
+        )
+        XCTAssertNil(
+            ImageTransformService.resize(
+                makeQuadrantImage(), to: CGSize(width: 40, height: CGFloat.infinity)
+            )
+        )
+    }
+
+    func testResizeRejectsNaNSizeInsteadOfTrapping() {
+        XCTAssertNil(
+            ImageTransformService.resize(makeQuadrantImage(), to: CGSize(width: CGFloat.nan, height: 40))
+        )
+    }
 }
