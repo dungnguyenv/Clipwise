@@ -19,7 +19,11 @@ final class ImageEditorDocument {
 
     private(set) var baseImage: NSImage
     private(set) var annotations: [ImageAnnotation] = []
-    private(set) var hasUnsavedChanges = false
+
+    /// The image the document was opened with, captured once and never
+    /// mutated. Used only to detect whether `baseImage` has since been
+    /// replaced by a transform.
+    private let originalBaseImage: NSImage
 
     private var undoStack: [Snapshot] = []
     private var redoStack: [Snapshot] = []
@@ -27,11 +31,25 @@ final class ImageEditorDocument {
 
     init(baseImage: NSImage) {
         self.baseImage = baseImage
+        self.originalBaseImage = baseImage
     }
 
     var pixelSize: CGSize { baseImage.pixelSize }
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
+
+    /// True when the document differs from the image it was opened with —
+    /// either annotations have been added, or `baseImage` has been replaced
+    /// by a transform. Derived from the actual state rather than from
+    /// undo-stack emptiness: once the stack has been capped, an empty stack
+    /// no longer implies "back at the original," so that derivation could
+    /// report clean while annotations (or a transformed base image) were
+    /// still present. Identity (`!==`), not equality, is the right test —
+    /// undoing a transform restores the very same `NSImage` instance the
+    /// document started with.
+    var hasUnsavedChanges: Bool {
+        !annotations.isEmpty || baseImage !== originalBaseImage
+    }
 
     /// Pixelated copy of the current base image, used to render redactions.
     /// Computed once per base image.
@@ -88,13 +106,11 @@ final class ImageEditorDocument {
             undoStack.removeFirst()
         }
         redoStack.removeAll()
-        hasUnsavedChanges = true
     }
 
     private func restore(_ snapshot: Snapshot) {
         baseImage = snapshot.baseImage
         annotations = snapshot.annotations
         cachedPixelatedBase = nil
-        hasUnsavedChanges = !undoStack.isEmpty
     }
 }

@@ -80,6 +80,25 @@ final class ImageEditorDocumentTests: XCTestCase {
         XCTAssertFalse(document.canRedo)
     }
 
+    func testUndoToOriginalClearsDirtyFlagThenRedoRestoresIt() {
+        let document = ImageEditorDocument(baseImage: makeImage())
+        document.add(makeAnnotation(1))
+        document.add(makeAnnotation(2))
+
+        document.undo()
+        document.undo()
+
+        XCTAssertTrue(document.annotations.isEmpty)
+        XCTAssertFalse(
+            document.hasUnsavedChanges,
+            "back at the original image with no annotations, the document is clean"
+        )
+
+        document.redo()
+
+        XCTAssertTrue(document.hasUnsavedChanges, "redoing reintroduces the annotation")
+    }
+
     func testUndoStackCapsAtLimit() {
         let document = ImageEditorDocument(baseImage: makeImage())
         let total = ImageEditorDocument.undoLimit + 5
@@ -95,6 +114,11 @@ final class ImageEditorDocumentTests: XCTestCase {
         XCTAssertEqual(
             document.annotations.count, 5,
             "the 5 oldest snapshots were dropped, so undo cannot go below 5 annotations"
+        )
+        XCTAssertTrue(
+            document.hasUnsavedChanges,
+            "5 annotations are still on the document even though the undo stack is exhausted — " +
+                "the dirty flag must not be derived from stack emptiness"
         )
     }
 
@@ -117,12 +141,57 @@ final class ImageEditorDocumentTests: XCTestCase {
         XCTAssertEqual(document.pixelSize, CGSize(width: 20, height: 10))
     }
 
+    func testUndoAfterAnnotateThenTransformRestoresBothAnnotationAndSize() {
+        // The path a real user takes: annotate, then transform (which flattens
+        // the annotation into the base image), then undo. Undo must bring back
+        // both the pre-transform size *and* the annotation the transform
+        // flattened away — not just one of the two.
+        let document = ImageEditorDocument(baseImage: makeImage(width: 20, height: 10))
+        let annotation = makeAnnotation(3)
+        document.add(annotation)
+
+        document.applyTransform { ImageTransformService.resize($0, to: CGSize(width: 40, height: 20)) }
+        XCTAssertTrue(document.annotations.isEmpty, "a transform flattens annotations into the base")
+        XCTAssertEqual(document.pixelSize, CGSize(width: 40, height: 20))
+
+        document.undo()
+
+        XCTAssertEqual(
+            document.pixelSize, CGSize(width: 20, height: 10),
+            "undo restores the pre-transform size"
+        )
+        XCTAssertEqual(
+            document.annotations, [annotation],
+            "undo restores the annotation the transform had flattened away"
+        )
+    }
+
     func testFailedTransformLeavesDocumentUnchanged() {
         let document = ImageEditorDocument(baseImage: makeImage(width: 20, height: 10))
+        document.add(makeAnnotation())
+        document.undo()
+        XCTAssertTrue(document.canRedo, "sanity check: the redo stack is populated before the failing transform")
+
         document.applyTransform { _ in nil }
 
         XCTAssertEqual(document.pixelSize, CGSize(width: 20, height: 10))
         XCTAssertFalse(document.hasUnsavedChanges)
         XCTAssertFalse(document.canUndo)
+        XCTAssertTrue(document.canRedo, "a failed transform must not touch the redo stack")
+    }
+
+    func testPixelatedBaseIsCachedAndInvalidatedByTransform() {
+        let document = ImageEditorDocument(baseImage: makeImage(width: 20, height: 10))
+
+        let first = document.pixelatedBase
+        let second = document.pixelatedBase
+        XCTAssertNotNil(first)
+        XCTAssertTrue(first === second, "pixelatedBase should be cached, not recomputed on every read")
+
+        document.applyTransform { ImageTransformService.resize($0, to: CGSize(width: 40, height: 20)) }
+
+        let third = document.pixelatedBase
+        XCTAssertNotNil(third)
+        XCTAssertFalse(first === third, "a transform must invalidate the cached pixelated copy")
     }
 }
