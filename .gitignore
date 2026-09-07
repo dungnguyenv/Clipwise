@@ -19,3 +19,7 @@ release/*.dmg
 # Temporary files
 *.tmp
 *.bak
+
+# Agent workspaces
+.claude/worktrees/
+.superpowers/

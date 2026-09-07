@@ -241,7 +241,7 @@ Expected: `** TEST SUCCEEDED **`, 6 tests passing.
 ```bash
 git add project.yml Makefile Tests/ClipboardItemTests.swift Clipwise/Utilities/Constants.swift \
         Clipwise/Services/ClipboardMonitor.swift Clipwise/Models/ClipboardItem.swift \
-        Clipwise/App/AppDelegate.swift Clipwise.xcodeproj
+        Clipwise/App/AppDelegate.swift
 git commit -m "test: add ClipwiseTests target and ClipboardItem editing helpers"
 ```
 
@@ -602,7 +602,7 @@ Expected: `** TEST SUCCEEDED **`, 8 new tests passing.
 
 ```bash
 git add Clipwise/Services/ItemEditService.swift Clipwise/Services/StorageManager.swift \
-        Clipwise/Extensions/NSImage+Extensions.swift Tests/ItemEditServiceTests.swift Clipwise.xcodeproj
+        Clipwise/Extensions/NSImage+Extensions.swift Tests/ItemEditServiceTests.swift
 git commit -m "feat: add ItemEditService for writing edited items back to history"
 ```
 
@@ -909,7 +909,7 @@ If `testRotateCounterClockwiseSwapsDimensionsAndMovesTopLeftToBottomLeft` fails 
 
 ```bash
 git add Clipwise/Services/ImageTransformService.swift Clipwise/Extensions/NSImage+Extensions.swift \
-        Tests/ImageTransformServiceTests.swift Clipwise.xcodeproj
+        Tests/ImageTransformServiceTests.swift
 git commit -m "feat: add ImageTransformService for crop/rotate/flip/resize/pixelate"
 ```
 
@@ -1341,7 +1341,7 @@ If `ImageRenderer` produces a blank or wrongly-scaled image, that is the fallbac
 
 ```bash
 git add Clipwise/Models/ImageAnnotation.swift Clipwise/Services/AnnotationRenderer.swift \
-        Tests/AnnotationRendererTests.swift Clipwise.xcodeproj
+        Tests/AnnotationRendererTests.swift
 git commit -m "feat: add vector annotation model and shared renderer"
 ```
 
@@ -1626,7 +1626,7 @@ Expected: `** TEST SUCCEEDED **`, 9 new tests passing.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Clipwise/Models/ImageEditorDocument.swift Tests/ImageEditorDocumentTests.swift Clipwise.xcodeproj
+git add Clipwise/Models/ImageEditorDocument.swift Tests/ImageEditorDocumentTests.swift
 git commit -m "feat: add ImageEditorDocument with snapshot undo/redo"
 ```
 
@@ -2030,7 +2030,7 @@ Expected: `** TEST SUCCEEDED **`, 5 new tests passing.
 
 ```bash
 git add Clipwise/Views/Editor Clipwise/Utilities/Constants.swift \
-        Tests/EditorSessionTests.swift Clipwise.xcodeproj
+        Tests/EditorSessionTests.swift
 git commit -m "feat: add EditorSession and editor views (text pane, image preview, footer)"
 ```
 
@@ -2314,7 +2314,7 @@ Copy some text so history has an entry, then press Cmd+Shift+C and check each of
 
 ```bash
 git add Clipwise/Views/Editor/EditorWindowController.swift Clipwise/App/AppState.swift \
-        Clipwise/App/AppDelegate.swift Clipwise/Views/Panel Clipwise.xcodeproj
+        Clipwise/App/AppDelegate.swift Clipwise/Views/Panel
 git commit -m "feat: open items in an editor window from hover button, menu, and Cmd+E"
 ```
 
@@ -2677,7 +2677,7 @@ make run
 
 ```bash
 git add Clipwise/Views/Editor/ImageCanvasView.swift Clipwise/Views/Editor/ImageEditorPane.swift \
-        Tests/ImageCanvasGeometryTests.swift Clipwise.xcodeproj
+        Tests/ImageCanvasGeometryTests.swift
 git commit -m "feat: draw annotations on the image canvas in image-pixel space"
 ```
 
@@ -2969,7 +2969,7 @@ Copy a screenshot and open its editor:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Clipwise/Views/Editor/EditorToolbarView.swift Clipwise/Views/Editor/ImageEditorPane.swift Clipwise.xcodeproj
+git add Clipwise/Views/Editor/EditorToolbarView.swift Clipwise/Views/Editor/ImageEditorPane.swift
 git commit -m "feat: add image editor toolbar with all tools, transforms and undo"
 ```
 
@@ -3095,7 +3095,7 @@ content into Pages or Word. The editor shows a warning banner when this applies.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Clipwise/Views/Editor/EditorWindowController.swift CLAUDE.md Clipwise.xcodeproj
+git add Clipwise/Views/Editor/EditorWindowController.swift CLAUDE.md
 git commit -m "feat: guard editor close on unsaved changes and document the editor"
 ```
 
