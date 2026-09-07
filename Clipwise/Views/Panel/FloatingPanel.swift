@@ -2,6 +2,15 @@ import AppKit
 
 final class FloatingPanel: NSPanel {
     var onDismiss: (() -> Void)?
+    /// Fired for ⌘E. Handled here, not in `SearchFieldView`'s `TextField`, because the
+    /// app installs no `NSMenu`/`.commands(...)` of its own — ⌘E is the default Edit
+    /// menu's "Use Selection for Find" — and there is no reliable way from source to
+    /// know whether a plain key-press handler in the field editor would ever see the
+    /// event before menu key-equivalent dispatch claims it. Overriding
+    /// `performKeyEquivalent` sidesteps the question: it wins whether AppKit consults
+    /// the key window before the menu, or the menu item turns out to be disabled and
+    /// the event falls through to us anyway.
+    var onEdit: (() -> Void)?
 
     init(contentView: NSView) {
         super.init(
@@ -55,6 +64,18 @@ final class FloatingPanel: NSPanel {
 
     override func cancelOperation(_ sender: Any?) {
         dismiss()
+    }
+
+    /// Matches Command-E with no other modifiers, so ⌘⇧E / ⌘⌃E etc. pass through
+    /// untouched. Returning `true` claims the event outright; returning `false` (via
+    /// `super`) lets normal key-equivalent dispatch continue for everything else.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+           event.charactersIgnoringModifiers?.lowercased() == "e" {
+            onEdit?()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
     }
 
     func showNearStatusItem(_ statusItem: NSStatusItem) {

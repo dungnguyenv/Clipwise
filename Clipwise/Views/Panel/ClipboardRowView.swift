@@ -52,9 +52,17 @@ struct ClipboardRowView: View {
                 Button {
                     onEdit?()
                 } label: {
+                    // The glyph itself renders at 13pt, unchanged; the frame + explicit
+                    // content shape below only widen the *hit target* around it. Without
+                    // this, a near-miss click falls through to the row's onTapGesture and
+                    // pastes into the frontmost app — the most startling near-miss outcome
+                    // anywhere in this UI, so the pencil gets a comfortably larger target
+                    // than its glyph.
                     Image(systemName: "pencil.circle")
                         .font(.system(size: 13))
                         .foregroundStyle(isSelected ? .white.opacity(0.9) : .secondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("Edit")

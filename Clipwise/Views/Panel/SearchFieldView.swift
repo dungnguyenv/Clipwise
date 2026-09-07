@@ -7,7 +7,6 @@ struct SearchFieldView: View {
     var onArrowDown: () -> Void
     var onArrowUp: () -> Void
     var onReturn: () -> Void
-    var onEdit: () -> Void
 
     @FocusState private var isFocused: Bool
 
@@ -38,13 +37,6 @@ struct SearchFieldView: View {
                 }
                 .onKeyPress(.escape) {
                     onEscape()
-                    return .handled
-                }
-                .onKeyPress(phases: .down) { press in
-                    guard press.modifiers.contains(.command),
-                          press.characters.lowercased() == "e"
-                    else { return .ignored }
-                    onEdit()
                     return .handled
                 }
 

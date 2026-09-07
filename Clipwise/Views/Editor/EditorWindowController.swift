@@ -83,6 +83,13 @@ final class EditorWindowController: NSObject, NSWindowDelegate {
     // MARK: - Private
 
     private func presentCannotOpenAlert() {
+        // `runModal()` is app-modal and blocks the run loop until dismissed. Clipwise is
+        // LSUIElement and this fires ~0.15s after the panel was hidden, so activation is
+        // very likely already in effect — but if it isn't, an unactivated app-modal alert
+        // can render off-screen or behind other windows, and the app looks hung with no
+        // visible way to dismiss it. Match `open(_:)`'s success path, which activates
+        // before showing its window for the same reason.
+        NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Can't Open Item"

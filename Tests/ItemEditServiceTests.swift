@@ -187,4 +187,31 @@ final class ItemEditServiceTests: XCTestCase {
         let item = makeTextItem("hello", in: storage)
         XCTAssertTrue(item.isEditable)
     }
+
+    /// Pins the guard ordering in `ClipboardItem.isEditable`: the file check must run
+    /// *before* the image check, not after. This item mimics copying an image file in
+    /// Finder, which can carry both a file-URL representation and an image
+    /// representation — `primaryType` resolves to `.fileURL` here only because
+    /// `ContentType.displayPriority` currently ranks file URLs above images, which is
+    /// documented as a display-only preference, not an editability rule. Checking the
+    /// file guard first, independent of `primaryType`/`displayPriority` ordering, is
+    /// what `isEditable`'s doc comment claims; this test would have passed for the
+    /// wrong reason (via the `primaryType == .image` short-circuit never even running)
+    /// if it only asserted the outcome without the guard order being what makes that
+    /// outcome true regardless of how `displayPriority` is ever tuned.
+    func testIsEditableRejectsFileItemsEvenWhenTheyAlsoCarryAnImage() throws {
+        let storage = makeStorage()
+        let item = ClipboardItem(title: "image file", contentHash: "h")
+        item.contents = [
+            ClipboardItemContent(
+                type: UTType.fileURL.identifier,
+                value: Data("file:///tmp/photo.png".utf8)
+            ),
+            ClipboardItemContent(type: UTType.png.identifier, value: makeImage(width: 2, height: 2).pngData()),
+        ]
+        storage.context.insert(item)
+
+        XCTAssertEqual(item.primaryType, .fileURL, "fileURL currently outranks image in displayPriority")
+        XCTAssertFalse(item.isEditable)
+    }
 }

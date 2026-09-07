@@ -85,7 +85,7 @@ final class AppState {
     var onOpenEditor: ((ClipboardItem) -> Void)?
 
     func editItem(at index: Int) {
-        guard index < filteredItems.count else { return }
+        guard index >= 0, index < filteredItems.count else { return }
         let item = filteredItems[index]
         guard item.isEditable else { return }
         onOpenEditor?(item)

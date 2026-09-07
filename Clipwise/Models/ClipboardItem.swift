@@ -179,8 +179,8 @@ final class ClipboardItem {
     /// editability from it would make this silently wrong if that ranking is ever
     /// reordered for a display-only reason.
     var isEditable: Bool {
-        if primaryType == .image { return true }
         guard !isFileItem else { return false }
+        if primaryType == .image { return true }
         return plainText != nil
     }
 

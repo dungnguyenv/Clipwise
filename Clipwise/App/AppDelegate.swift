@@ -85,6 +85,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.appState.isPanelVisible = false
             self?.appState.searchQuery = ""
         }
+
+        floatingPanel.onEdit = { [weak self] in
+            guard let self else { return }
+            self.appState.editItem(at: self.appState.selectedIndex)
+        }
     }
 
     func togglePanel() {

@@ -17,9 +17,6 @@ struct PanelContentView: View {
                     onArrowUp: { appState.moveSelection(by: -1) },
                     onReturn: {
                         appState.selectAndPaste()
-                    },
-                    onEdit: {
-                        appState.editItem(at: appState.selectedIndex)
                     }
                 )
 
