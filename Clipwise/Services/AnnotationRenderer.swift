@@ -86,6 +86,20 @@ enum AnnotationRenderer {
             highlight ? annotation.color.opacity(0.35) : annotation.color
         )
 
+        // `drawLayer` starts its callback with a fresh, fully transparent
+        // backdrop — not a view onto what's already drawn in `context`.
+        // Setting `blendMode` *inside* that layer would blend a draw against
+        // that empty backdrop, which is a no-op (multiplying against nothing
+        // just keeps the source colour), and the layer is then composited
+        // back onto `context` with a normal blend regardless. Set the blend
+        // mode directly on `context` instead, scoped around both drawing
+        // paths below — the single-point dot and the multi-point stroke —
+        // so a tap and a drag with the highlighter blend identically against
+        // the base image and any annotations already drawn beneath it.
+        let previousBlendMode = context.blendMode
+        if highlight { context.blendMode = .multiply }
+        defer { if highlight { context.blendMode = previousBlendMode } }
+
         guard points.count > 1 else {
             // A single click still leaves a dot.
             guard let point = points.first else { return }
@@ -104,24 +118,7 @@ enum AnnotationRenderer {
             path.addLine(to: point)
         }
         let style = StrokeStyle(lineWidth: annotation.lineWidth, lineCap: .round, lineJoin: .round)
-
-        if highlight {
-            // `drawLayer` starts its callback with a fresh, fully transparent
-            // backdrop — not a view onto what's already drawn in `context`.
-            // Setting `blendMode` *inside* that layer would blend the stroke
-            // against that empty backdrop, which is a no-op (multiplying
-            // against nothing just keeps the source colour), and the layer
-            // is then composited back onto `context` with a normal blend
-            // regardless. Set the blend mode directly on `context` instead,
-            // around the stroke, so it blends against the base image and any
-            // annotations already drawn beneath it.
-            let previousBlendMode = context.blendMode
-            context.blendMode = .multiply
-            context.stroke(path, with: shading, style: style)
-            context.blendMode = previousBlendMode
-        } else {
-            context.stroke(path, with: shading, style: style)
-        }
+        context.stroke(path, with: shading, style: style)
     }
 
     private static func drawArrow(

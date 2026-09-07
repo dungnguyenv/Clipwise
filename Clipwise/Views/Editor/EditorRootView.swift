@@ -23,7 +23,11 @@ struct EditorRootView: View {
         }
         .frame(minWidth: Constants.editorMinWidth, minHeight: Constants.editorMinHeight)
         .alert(
-            "Cannot Save",
+            // Generic on purpose: `session.errorMessage` now also carries
+            // transform failures from `ImageEditorPane` (rotate/flip/resize/
+            // crop), not only save failures — the message text itself says
+            // what actually failed.
+            "Error",
             isPresented: Binding(
                 get: { session.errorMessage != nil },
                 set: { if !$0 { session.errorMessage = nil } }

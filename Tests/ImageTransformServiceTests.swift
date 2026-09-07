@@ -134,4 +134,24 @@ final class ImageTransformServiceTests: XCTestCase {
             ImageTransformService.resize(makeQuadrantImage(), to: CGSize(width: CGFloat.nan, height: 40))
         )
     }
+
+    /// A plausible fat-fingered resize (e.g. "50000" × "50000") is finite and
+    /// `>= 1`, so it passes every other guard — without an explicit cap it
+    /// would reach `render`'s `CGContext` allocation attempt, which is the
+    /// expensive/dangerous part this guard exists to avoid attempting at all.
+    func testResizeRejectsSizeAboveMaxDimension() {
+        XCTAssertNil(
+            ImageTransformService.resize(
+                makeQuadrantImage(),
+                to: CGSize(width: ImageTransformService.maxDimension + 1, height: 40)
+            )
+        )
+        XCTAssertNotNil(
+            ImageTransformService.resize(
+                makeQuadrantImage(),
+                to: CGSize(width: ImageTransformService.maxDimension, height: 40)
+            ),
+            "the boundary value itself should still be accepted"
+        )
+    }
 }

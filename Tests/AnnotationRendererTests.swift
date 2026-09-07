@@ -217,6 +217,80 @@ final class AnnotationRendererTests: XCTestCase {
                 "if this fails, the highlighter's multiply blend mode is inert and it is " +
                 "rendering as a plain translucent stroke instead"
         )
+
+        // The assertion above is one-sided: a regression that dropped the
+        // highlighter stroke entirely (drew nothing) would also leave the
+        // pixel no brighter than the background, and would pass it right
+        // along with a correctly-multiplied stroke. Pin the other half too —
+        // the highlighter's yellow has a near-zero blue component, so a live
+        // multiply must measurably darken the background's blue channel
+        // specifically; an unchanged blue channel means nothing was drawn.
+        let backgroundRep = try XCTUnwrap(base.bitmapRep)
+        let backgroundColorAtPoint = try XCTUnwrap(
+            backgroundRep.colorAt(x: 20, y: 1)?.usingColorSpace(.deviceRGB)
+        )
+        let outputRep = try XCTUnwrap(output.bitmapRep)
+        let strokeColorAtPoint = try XCTUnwrap(
+            outputRep.colorAt(x: 20, y: 10)?.usingColorSpace(.deviceRGB)
+        )
+        XCTAssertLessThan(
+            strokeColorAtPoint.blueComponent, backgroundColorAtPoint.blueComponent - 0.01,
+            "multiplying the background's blue channel by the highlighter's near-zero blue " +
+                "component should measurably darken it — an unchanged blue channel means the " +
+                "stroke was never drawn at all, not that it blended correctly"
+        )
+    }
+
+    /// A single click (one point) takes a different code path in
+    /// `drawStroke` than a drag (a fill, not a stroke) — pins that the dot
+    /// still shares the highlighter's blend scope, so a tap and a drag with
+    /// the same tool behave the same way rather than only the drag
+    /// multiplying against the backdrop.
+    ///
+    /// Needs the same *pair* of assertions as the stroke test above, not
+    /// just the blue-channel one: the highlighter's red and green components
+    /// are both 1, so multiply leaves a dark backdrop's red/green channels
+    /// unchanged while a plain alpha blend brightens them sharply — that's
+    /// what actually distinguishes "multiplied" from "blended normally" here
+    /// (and what the pre-fix dot, which used a plain `context.fill` outside
+    /// any blend scope, would have failed). The blue channel alone would not
+    /// have caught that regression: the highlighter's blue component is 0,
+    /// so multiply and a plain alpha blend produce the same blue result —
+    /// blue only distinguishes "something was drawn" from "nothing was".
+    func testHighlighterDotDoesNotLightenADarkBackground() throws {
+        let backgroundColor = NSColor(deviceRed: 0.05, green: 0.05, blue: 0.05, alpha: 1)
+        let base = makeSolidImage(width: 40, height: 20, color: backgroundColor)
+        let highlighterColor = NSColor(deviceRed: 1, green: 1, blue: 0, alpha: 1)
+        let dot = ImageAnnotation(
+            kind: .stroke(points: [CGPoint(x: 20, y: 10)], highlight: true),
+            color: Color(nsColor: highlighterColor),
+            lineWidth: 10
+        )
+
+        let output = try XCTUnwrap(AnnotationRenderer.flatten(
+            baseImage: base, pixelatedBase: nil, annotations: [dot], pixelSize: base.pixelSize
+        ))
+
+        let backgroundBrightness = try XCTUnwrap(brightness(of: base, x: 20, y: 1))
+        let onDotBrightness = try XCTUnwrap(brightness(of: output, x: 20, y: 10))
+        XCTAssertLessThanOrEqual(
+            onDotBrightness, backgroundBrightness + 0.02,
+            "a single-click highlighter dot should multiply against the backdrop exactly like " +
+                "a dragged stroke does, not fall back to a plain alpha-blended fill"
+        )
+
+        let backgroundRep = try XCTUnwrap(base.bitmapRep)
+        let backgroundColorAtPoint = try XCTUnwrap(
+            backgroundRep.colorAt(x: 20, y: 1)?.usingColorSpace(.deviceRGB)
+        )
+        let outputRep = try XCTUnwrap(output.bitmapRep)
+        let dotColorAtPoint = try XCTUnwrap(
+            outputRep.colorAt(x: 20, y: 10)?.usingColorSpace(.deviceRGB)
+        )
+        XCTAssertLessThan(
+            dotColorAtPoint.blueComponent, backgroundColorAtPoint.blueComponent - 0.01,
+            "the dot should still be drawn at all, not omitted entirely"
+        )
     }
 
     func testEditorToolCasesAllHaveIcons() {

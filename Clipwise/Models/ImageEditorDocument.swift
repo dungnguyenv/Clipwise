@@ -69,12 +69,19 @@ final class ImageEditorDocument {
     /// Flattens current annotations into the base image, then applies
     /// `transform` to the result. Any geometric change goes through here — that
     /// is what keeps annotation coordinates meaningful after a crop or rotate.
-    func applyTransform(_ transform: (NSImage) -> NSImage?) {
-        guard let flattenedImage = flattened(), let transformed = transform(flattenedImage) else { return }
+    ///
+    /// Returns `false` when flattening or `transform` itself returned `nil`,
+    /// in which case the document is left untouched. Callers that want to
+    /// surface that failure to the user (rather than have the toolbar button
+    /// silently do nothing) should check the return value.
+    @discardableResult
+    func applyTransform(_ transform: (NSImage) -> NSImage?) -> Bool {
+        guard let flattenedImage = flattened(), let transformed = transform(flattenedImage) else { return false }
         checkpoint()
         annotations = []
         baseImage = transformed
         cachedPixelatedBase = nil
+        return true
     }
 
     func undo() {

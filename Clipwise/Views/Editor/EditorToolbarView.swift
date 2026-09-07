@@ -11,6 +11,13 @@ struct EditorToolbarView: View {
     /// `true` flips horizontally, `false` vertically.
     var onFlip: (Bool) -> Void
     var onResize: () -> Void
+    /// Wraps `document.undo()`. Routed through the pane rather than calling
+    /// `document.undo()` directly, so the pane can also clear any transient
+    /// tool state (a crop marquee, a pending text caret) that's positioned in
+    /// pixel coordinates undo may be about to change.
+    var onUndo: () -> Void
+    /// Wraps `document.redo()`, for the same reason as `onUndo`.
+    var onRedo: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
@@ -56,13 +63,13 @@ struct EditorToolbarView: View {
 
             Spacer()
 
-            Button { document.undo() } label: { Image(systemName: "arrow.uturn.backward") }
+            Button { onUndo() } label: { Image(systemName: "arrow.uturn.backward") }
                 .buttonStyle(.plain)
                 .disabled(!document.canUndo)
                 .keyboardShortcut("z", modifiers: .command)
                 .help("Undo")
 
-            Button { document.redo() } label: { Image(systemName: "arrow.uturn.forward") }
+            Button { onRedo() } label: { Image(systemName: "arrow.uturn.forward") }
                 .buttonStyle(.plain)
                 .disabled(!document.canRedo)
                 .keyboardShortcut("z", modifiers: [.command, .shift])

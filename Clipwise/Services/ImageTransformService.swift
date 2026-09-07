@@ -8,6 +8,14 @@ import CoreImage
 /// that takes a rect flips it explicitly.
 enum ImageTransformService {
 
+    /// No screenshot or pasted image is anywhere near this large. It exists
+    /// only to stop a fat-fingered resize request (e.g. "50000" × "50000",
+    /// still `>= 1` and finite) from attempting a multi-gigabyte `CGContext`
+    /// allocation on the main actor — `render` would eventually fail such a
+    /// request too, but only after the attempt, and the attempt itself is
+    /// the expensive/dangerous part.
+    static let maxDimension: CGFloat = 10_000
+
     static func crop(_ image: NSImage, to rect: CGRect) -> NSImage? {
         guard let cgImage = image.cgImageAtNativeSize() else { return nil }
         let bounds = CGRect(x: 0, y: 0, width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
@@ -69,6 +77,9 @@ enum ImageTransformService {
         // have done it — every caller of this service-level function relies
         // on it being safe.
         guard size.width.isFinite, size.height.isFinite else { return nil }
+        guard size.width >= 1, size.height >= 1,
+              size.width <= maxDimension, size.height <= maxDimension
+        else { return nil }
         guard let cgImage = image.cgImageAtNativeSize() else { return nil }
         let width = Int(size.width.rounded())
         let height = Int(size.height.rounded())
