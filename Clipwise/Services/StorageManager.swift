@@ -6,12 +6,12 @@ final class StorageManager {
     let container: ModelContainer
     var context: ModelContext { container.mainContext }
 
-    init() {
+    init(inMemory: Bool = false) {
         let schema = Schema([ClipboardItem.self, ClipboardItemContent.self])
         let config = ModelConfiguration(
             "Clipwise",
             schema: schema,
-            isStoredInMemoryOnly: false,
+            isStoredInMemoryOnly: inMemory,
             allowsSave: true
         )
 
