@@ -40,6 +40,9 @@ extension NSImage {
 
     /// Native pixel dimensions. `size` is in points, so on a Retina screenshot
     /// it reports half the real resolution — never use it for pixel math.
+    /// Falls back to `size` (points, not pixels) only when the image has no
+    /// bitmap representations and no TIFF data to rasterize — i.e. a degenerate
+    /// `NSImage` with nothing drawable, whose `size` is typically `.zero`.
     var pixelSize: CGSize {
         guard let rep = bitmapRep else { return size }
         return CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)

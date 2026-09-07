@@ -43,6 +43,25 @@ final class ItemEditServiceTests: XCTestCase {
         return image
     }
 
+    /// A large flat-colour bitmap, filled via the raw buffer rather than
+    /// per-pixel `setColor` (which is far too slow at this size). TIFF stores
+    /// this uncompressed (~width * height * 4 bytes), while PNG collapses a
+    /// flat colour to almost nothing — the gap the TIFF-drop guard relies on.
+    private func makeLargeSolidImage(width: Int, height: Int) -> NSImage {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        if let buffer = rep.bitmapData {
+            memset(buffer, 0xFF, rep.bytesPerRow * height)
+        }
+        rep.size = NSSize(width: width, height: height)
+        let image = NSImage(size: rep.size)
+        image.addRepresentation(rep)
+        return image
+    }
+
     func testOverwriteKeepsIdentityAndReplacesContent() throws {
         let storage = makeStorage()
         let service = ItemEditService(storageManager: storage)
@@ -50,12 +69,18 @@ final class ItemEditServiceTests: XCTestCase {
         item.isPinned = true
         let id = item.id
         let firstCopiedAt = item.firstCopiedAt
+        let numberOfCopies = item.numberOfCopies
+        let sourceAppBundleID = item.sourceAppBundleID
+        let sourceAppName = item.sourceAppName
 
         try service.save(text: "after", for: item, mode: .overwrite)
 
         XCTAssertEqual(item.id, id)
         XCTAssertTrue(item.isPinned)
         XCTAssertEqual(item.firstCopiedAt, firstCopiedAt)
+        XCTAssertEqual(item.numberOfCopies, numberOfCopies)
+        XCTAssertEqual(item.sourceAppBundleID, sourceAppBundleID)
+        XCTAssertEqual(item.sourceAppName, sourceAppName)
         XCTAssertEqual(item.plainText, "after")
         XCTAssertEqual(item.title, "after")
         XCTAssertNotEqual(item.contentHash, "original-hash")
@@ -101,6 +126,19 @@ final class ItemEditServiceTests: XCTestCase {
         XCTAssertFalse(item.contents.contains { $0.type == UTType.rtf.identifier })
     }
 
+    func testTextSaveOverCapThrowsTooLarge() {
+        let storage = makeStorage()
+        let service = ItemEditService(storageManager: storage)
+        let item = makeTextItem("before", in: storage)
+        let oversized = String(repeating: "a", count: Constants.maxContentSize + 1)
+
+        XCTAssertThrowsError(try service.save(text: oversized, for: item, mode: .overwrite)) { error in
+            guard case ItemEditService.EditError.tooLarge = error else {
+                return XCTFail("Expected EditError.tooLarge, got \(error)")
+            }
+        }
+    }
+
     func testImageSaveWritesPNG() throws {
         let storage = makeStorage()
         let service = ItemEditService(storageManager: storage)
@@ -112,6 +150,22 @@ final class ItemEditServiceTests: XCTestCase {
         XCTAssertNotNil(png?.value)
         XCTAssertEqual(item.title, "Image")
         XCTAssertEqual(NSImage(data: png!.value!)?.pixelSize, CGSize(width: 8, height: 4))
+    }
+
+    func testImageSaveDropsTIFFWhenOverCapButKeepsPNG() throws {
+        let storage = makeStorage()
+        let service = ItemEditService(storageManager: storage)
+        let item = makeTextItem("placeholder", in: storage)
+        // Flat colour, ~10.4 MB uncompressed (width * height * 4 bytes) — over the
+        // cap as TIFF, but PNG compresses a solid fill to a few KB, well under it.
+        let image = makeLargeSolidImage(width: 2000, height: 1300)
+
+        try service.save(image: image, for: item, mode: .overwrite)
+
+        let png = item.contents.first { $0.type == UTType.png.identifier }
+        XCTAssertNotNil(png?.value)
+        XCTAssertLessThanOrEqual(png?.value?.count ?? Int.max, Constants.maxContentSize)
+        XCTAssertFalse(item.contents.contains { $0.type == UTType.tiff.identifier })
     }
 
     func testIsEditableRejectsFileItems() throws {

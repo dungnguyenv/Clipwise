@@ -17,6 +17,7 @@ final class ItemEditService {
     enum EditError: LocalizedError {
         case encodingFailed
         case tooLarge(bytes: Int)
+        case saveFailed(Error)
 
         var errorDescription: String? {
             switch self {
@@ -26,9 +27,11 @@ final class ItemEditService {
                 let actual = Double(bytes) / 1_000_000
                 let limit = Constants.maxContentSize / 1_000_000
                 return String(
-                    format: "The edited image is %.1f MB, over the %d MB history limit. Use the Resize tool to shrink it.",
+                    format: "The edited content is %.1f MB, over the %d MB history limit.",
                     actual, limit
                 )
+            case .saveFailed(let underlying):
+                return "Could not save the edited item: \(underlying.localizedDescription)"
             }
         }
     }
@@ -42,13 +45,14 @@ final class ItemEditService {
     @discardableResult
     func save(text: String, for item: ClipboardItem, mode: SaveMode) throws -> ClipboardItem {
         let data = Data(text.utf8)
+        guard data.count <= Constants.maxContentSize else { throw EditError.tooLarge(bytes: data.count) }
         // Rich-text representations are deliberately dropped: PasteService replays
         // every stored type, so a stale RTF blob would paste the pre-edit content.
         let representations = [
             (type: UTType.utf8PlainText.identifier, data: data),
             (type: UTType.plainText.identifier, data: data),
         ]
-        return apply(
+        return try apply(
             representations: representations,
             title: ClipboardItem.generateTitle(forText: text),
             to: item,
@@ -67,7 +71,7 @@ final class ItemEditService {
         if let tiff = image.tiffRepresentation, tiff.count <= Constants.maxContentSize {
             representations.append((type: UTType.tiff.identifier, data: tiff))
         }
-        return apply(representations: representations, title: "Image", to: item, mode: mode)
+        return try apply(representations: representations, title: "Image", to: item, mode: mode)
     }
 
     // MARK: - Private
@@ -77,7 +81,7 @@ final class ItemEditService {
         title: String,
         to item: ClipboardItem,
         mode: SaveMode
-    ) -> ClipboardItem {
+    ) throws -> ClipboardItem {
         let hash = ClipboardItem.generateHash(from: representations)
         let newContents = representations.map { ClipboardItemContent(type: $0.type, value: $0.data) }
 
@@ -110,7 +114,7 @@ final class ItemEditService {
         do {
             try storageManager.context.save()
         } catch {
-            NSLog("[Clipwise] Failed to save edited item: \(error)")
+            throw EditError.saveFailed(error)
         }
         return target
     }
