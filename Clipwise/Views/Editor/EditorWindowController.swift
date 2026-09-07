@@ -75,6 +75,41 @@ final class EditorWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - NSWindowDelegate
 
+    /// Runs only for the `onCancel` close path (`window.performClose(nil)`, including
+    /// Esc) — the `onFinished` path in `open(_:)` calls `forceClose`, which nils
+    /// `delegate` before `close()` specifically so this never runs after a successful
+    /// save. See `forceClose`'s doc comment for why that split exists.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard let session = entries.values.first(where: { $0.window === sender })?.session else {
+            return true
+        }
+        guard session.hasUnsavedChanges else { return true }
+
+        let alert = NSAlert()
+        alert.messageText = "You have unsaved changes"
+        alert.informativeText = "Save your edits before closing?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Save as Copy")
+        alert.addButton(withTitle: "Discard")
+        alert.addButton(withTitle: "Cancel")
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            guard session.save(.overwrite) else { return false }
+            appState.loadItems()
+            return true
+        case .alertSecondButtonReturn:
+            guard session.save(.copy) else { return false }
+            appState.loadItems()
+            return true
+        case .alertThirdButtonReturn:
+            return true
+        default:
+            return false
+        }
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
         entries = entries.filter { $0.value.window !== window }

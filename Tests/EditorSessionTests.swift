@@ -1,5 +1,6 @@
 import AppKit
 import SwiftData
+import SwiftUI
 import UniformTypeIdentifiers
 import XCTest
 @testable import Clipwise
@@ -232,6 +233,29 @@ final class EditorSessionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    /// Pins the exact invariant `EditorWindowController.forceClose` exists to work
+    /// around: `originalText` is captured once at `init` and never refreshed, so a
+    /// successful save does not clear `hasUnsavedChanges`. If this ever starts
+    /// returning `false`, `EditorWindowController`'s doc comment justifying two
+    /// separate close paths (force-close after save vs. `windowShouldClose` on
+    /// cancel) is wrong and the two paths may be safe to collapse — but until then,
+    /// routing the post-save close through `windowShouldClose` would show the
+    /// unsaved-changes alert immediately after every successful save.
+    func testHasUnsavedChangesStaysTrueAfterSuccessfulTextSave() throws {
+        let (service, storage) = makeService()
+        let item = makeTextItem("before", in: storage)
+        let session = try XCTUnwrap(EditorSession(item: item, editService: service))
+
+        session.text = "after"
+        XCTAssertTrue(session.hasUnsavedChanges)
+        XCTAssertTrue(session.save(.overwrite))
+
+        XCTAssertTrue(
+            session.hasUnsavedChanges,
+            "EditorSession never refreshes its saved baseline; forceClose relies on this"
+        )
+    }
+
     func testSaveAsCopyLeavesOriginal() throws {
         let (service, storage) = makeService()
         let item = makeTextItem("before", in: storage)
@@ -265,6 +289,32 @@ final class EditorSessionTests: XCTestCase {
 
         XCTAssertNil(session.errorMessage)
         XCTAssertEqual(item.image?.pixelSize, CGSize(width: 8, height: 4))
+    }
+
+    /// Image-mode counterpart to `testHasUnsavedChangesStaysTrueAfterSuccessfulTextSave`:
+    /// `ImageEditorDocument.hasUnsavedChanges` is derived from `annotations`/`baseImage`
+    /// identity, which `save()` never touches, so it also stays true after a successful
+    /// save. Same reason `forceClose` exists.
+    func testImageHasUnsavedChangesStaysTrueAfterSuccessfulSave() throws {
+        let (service, storage) = makeService()
+        let item = makeImageItem(makeImage(width: 8, height: 4), in: storage)
+        let session = try XCTUnwrap(EditorSession(item: item, editService: service))
+        let document = try XCTUnwrap(session.document)
+
+        document.add(
+            ImageAnnotation(
+                kind: .rectangle(CGRect(x: 0, y: 0, width: 2, height: 2)),
+                color: .red,
+                lineWidth: 2
+            )
+        )
+        XCTAssertTrue(session.hasUnsavedChanges)
+        XCTAssertTrue(session.save(.overwrite))
+
+        XCTAssertTrue(
+            session.hasUnsavedChanges,
+            "ImageEditorDocument never clears on save; forceClose relies on this"
+        )
     }
 
     func testImageSaveFailsWhenFlattenedImageIsNil() throws {
