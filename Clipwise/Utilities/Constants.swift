@@ -16,4 +16,7 @@ enum Constants {
     static let maxTitleLength = 200
     static let thumbnailSize: CGFloat = 40
     static let pollingInterval: TimeInterval = 0.5
+
+    /// Max stored bytes per pasteboard representation (10MB).
+    static let maxContentSize = 10_000_000
 }

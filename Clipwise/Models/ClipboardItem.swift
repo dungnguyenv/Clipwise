@@ -156,4 +156,30 @@ final class ClipboardItem {
         }
         return "Unknown"
     }
+
+    // MARK: - Editing
+
+    /// Only text and image items can be opened in the editor (v1).
+    var isEditable: Bool {
+        primaryType == .text || primaryType == .image
+    }
+
+    /// Hash for content assembled by the editor rather than read from a pasteboard.
+    /// Same SHA256-hex format as `generateHash(from: [NSPasteboardItem])`.
+    static func generateHash(from representations: [(type: String, data: Data)]) -> String {
+        var hasher = SHA256()
+        for representation in representations {
+            hasher.update(data: representation.data)
+        }
+        let digest = hasher.finalize()
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Title rule shared by capture and editing: first non-empty line, capped.
+    static func generateTitle(forText text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Unknown" }
+        let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
+        return String(firstLine.prefix(Constants.maxTitleLength))
+    }
 }

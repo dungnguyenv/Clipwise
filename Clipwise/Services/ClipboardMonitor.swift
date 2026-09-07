@@ -15,9 +15,6 @@ final class ClipboardMonitor {
     /// Concealed type used by password managers (nspasteboard.org convention)
     private static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
 
-    /// Max data size per content type (10MB)
-    private static let maxContentSize = 10_000_000
-
     private let storageManager: StorageManager
     private let appFilterService: AppFilterService
     var onNewItem: ((ClipboardItem) -> Void)?
@@ -100,7 +97,7 @@ final class ClipboardMonitor {
         for pbItem in items {
             for type in pbItem.types {
                 guard let data = pbItem.data(forType: type) else { continue }
-                guard data.count < Self.maxContentSize else { continue }
+                guard data.count < Constants.maxContentSize else { continue }
 
                 let content = ClipboardItemContent(
                     type: type.rawValue,

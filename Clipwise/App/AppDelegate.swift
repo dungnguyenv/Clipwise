@@ -10,6 +10,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var appState: AppState!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Unit tests host inside this app. Booting the status item, hotkeys and
+        // clipboard poll during a test run is both pointless and disruptive.
+        guard NSClassFromString("XCTestCase") == nil else { return }
+
         appState = AppState()
 
         appState.onDismissPanel = { [weak self] in
