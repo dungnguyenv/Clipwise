@@ -42,6 +42,20 @@ final class ItemEditService {
         self.storageManager = storageManager
     }
 
+    /// Discards uncommitted in-memory changes.
+    ///
+    /// `apply(...)` mutates the item (or inserts the copy) *before* calling
+    /// `context.save()`, and does not undo that mutation when the save throws
+    /// `EditError.saveFailed`. A caller that needs the model to stay consistent
+    /// with what is actually on disk — `EditorSession.save`, so the clipboard
+    /// panel behind the editor window never shows an edit that didn't persist —
+    /// should call this from its `catch`. Exposed here rather than handing out
+    /// the underlying `ModelContext` so callers don't need to know SwiftData is
+    /// the storage mechanism.
+    func rollback() {
+        storageManager.context.rollback()
+    }
+
     @discardableResult
     func save(text: String, for item: ClipboardItem, mode: SaveMode) throws -> ClipboardItem {
         let data = Data(text.utf8)

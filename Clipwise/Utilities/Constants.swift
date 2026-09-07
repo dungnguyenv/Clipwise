@@ -19,4 +19,9 @@ enum Constants {
 
     /// Max stored bytes per pasteboard representation (10MB).
     static let maxContentSize = 10_000_000
+
+    static let editorWindowWidth: CGFloat = 720
+    static let editorWindowHeight: CGFloat = 560
+    static let editorMinWidth: CGFloat = 520
+    static let editorMinHeight: CGFloat = 420
 }
