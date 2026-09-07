@@ -106,6 +106,18 @@ struct ImageCanvasView: View {
         )
     }
 
+    /// True when a drag's two endpoints coincide — i.e. it never moved.
+    /// `DragGesture(minimumDistance: 0)` fires `onChanged` even for a plain
+    /// click, at which point the start and current locations are identical.
+    /// Shape, redact, and crop tools treat that as no gesture at all: nobody
+    /// drags out a zero-size rectangle or arrow on purpose, and a stray click
+    /// should neither commit an invisible annotation nor overwrite a crop
+    /// selection the user already made. Pen and highlighter are exempt —
+    /// a single tap legitimately leaves a dot.
+    static func isDegenerateDrag(_ a: CGPoint, _ b: CGPoint) -> Bool {
+        a == b
+    }
+
     // MARK: - Gesture
 
     private func dragGesture(display: CGRect, scale: CGFloat) -> some Gesture {
@@ -124,6 +136,7 @@ struct ImageCanvasView: View {
                     appendStrokePoint(point, from: origin)
 
                 case .arrow:
+                    guard !Self.isDegenerateDrag(origin, point) else { draft = nil; return }
                     draft = ImageAnnotation(
                         kind: .arrow(from: origin, to: point),
                         color: color,
@@ -131,6 +144,7 @@ struct ImageCanvasView: View {
                     )
 
                 case .rectangle:
+                    guard !Self.isDegenerateDrag(origin, point) else { draft = nil; return }
                     draft = ImageAnnotation(
                         kind: .rectangle(Self.rect(origin, point)),
                         color: color,
@@ -138,6 +152,7 @@ struct ImageCanvasView: View {
                     )
 
                 case .ellipse:
+                    guard !Self.isDegenerateDrag(origin, point) else { draft = nil; return }
                     draft = ImageAnnotation(
                         kind: .ellipse(Self.rect(origin, point)),
                         color: color,
@@ -145,6 +160,7 @@ struct ImageCanvasView: View {
                     )
 
                 case .redact:
+                    guard !Self.isDegenerateDrag(origin, point) else { draft = nil; return }
                     draft = ImageAnnotation(
                         kind: .redact(Self.rect(origin, point)),
                         color: color,
@@ -152,6 +168,7 @@ struct ImageCanvasView: View {
                     )
 
                 case .crop:
+                    guard !Self.isDegenerateDrag(origin, point) else { return }
                     cropRect = Self.rect(origin, point)
 
                 case .text:
@@ -178,8 +195,11 @@ struct ImageCanvasView: View {
             return
         }
         let isHighlighter = tool == .highlighter
+        // The first `onChanged` call of a drag reports the same point for both
+        // start and current location — don't store that leading point twice.
+        let initialPoints = origin == point ? [origin] : [origin, point]
         draft = ImageAnnotation(
-            kind: .stroke(points: [origin, point], highlight: isHighlighter),
+            kind: .stroke(points: initialPoints, highlight: isHighlighter),
             color: color,
             // A highlighter only reads as one if it is fat.
             lineWidth: isHighlighter ? lineWidth * 3 : lineWidth

@@ -63,4 +63,13 @@ final class ImageCanvasGeometryTests: XCTestCase {
         let dragged = ImageCanvasView.rect(CGPoint(x: 30, y: 40), CGPoint(x: 10, y: 20))
         XCTAssertEqual(dragged, CGRect(x: 10, y: 20, width: 20, height: 20))
     }
+
+    func testIsDegenerateDragDetectsIdenticalEndpoints() {
+        XCTAssertTrue(ImageCanvasView.isDegenerateDrag(CGPoint(x: 5, y: 5), CGPoint(x: 5, y: 5)))
+    }
+
+    func testIsDegenerateDragAcceptsAnyRealMovement() {
+        XCTAssertFalse(ImageCanvasView.isDegenerateDrag(CGPoint(x: 5, y: 5), CGPoint(x: 5, y: 5.01)))
+        XCTAssertFalse(ImageCanvasView.isDegenerateDrag(CGPoint(x: 5, y: 5), CGPoint(x: 6, y: 5)))
+    }
 }
