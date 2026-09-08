@@ -73,9 +73,57 @@ final class ClipboardItem {
 
     // MARK: - Password Detection
 
-    /// Heuristic: detect if the text looks like a password/secret
+    /// Heuristic: does this item's plain text look like a password or secret?
+    /// The decision lives in the static `looksLikePassword(_:)` so it can be tested
+    /// without a `ModelContext`; this just feeds it the plain-text representation.
     var looksLikePassword: Bool {
         guard let text = plainText else { return false }
+        return Self.looksLikePassword(text)
+    }
+
+    /// Token prefixes that are secrets by construction, whatever the character-class
+    /// rule below would say. This matters for vendors whose token bodies are
+    /// lowercase+digits only (GitHub `ghp_`, GitLab `glpat-`, Hugging Face `hf_`, ...):
+    /// that is two character classes, which the rule alone never flags. Checked after
+    /// the shape guard (single line, no spaces, 8–128 chars) but before the exclusions,
+    /// so `sk-...` still wins when its body happens to contain "@" or end in ".dev".
+    private static let secretPrefixes: [String] = [
+        // OpenAI / Anthropic / Stripe
+        "sk-", "pk-", "sk_live_", "sk_test_", "rk_live_", "rk_test_",
+        // GitHub / GitLab
+        "ghp_", "gho_", "ghs_", "ghu_", "ghr_", "github_pat_", "glpat-",
+        // Slack
+        "xoxb-", "xoxp-", "xoxa-", "xoxr-", "xoxe-", "xapp-",
+        // AWS / Google
+        "AKIA", "AIza", "ya29.",
+        // Package registries and model hubs
+        "npm_", "pypi-", "hf_",
+        // Misc SaaS
+        "dop_v1_", "doo_v1_", "shpat_", "shpss_", "hvs.", "lin_api_", "PMAK-", "figd_", "sbp_",
+        // JWT header (`{"alg":` base64url-encoded)
+        "eyJ",
+    ]
+
+    /// Punctuation counted as the "symbol" character class. `@` and `.` are here even
+    /// though they also drive the email/domain exclusions — those run first, so by the
+    /// time this set is consulted the text is not an email or domain and its `@`/`.`
+    /// legitimately count as randomness.
+    private static let symbolCharacters: Set<Character> = Set("!@#$%^&*()_+-=[]{}|;:',.<>?/~`\"\\")
+
+    /// Pure decision behind `looksLikePassword`. `PasswordDetectionTests` pins the
+    /// shape each rule is meant to catch or let through; every exclusion below exists
+    /// because it once produced a false positive, so don't drop one to "simplify".
+    static func looksLikePassword(_ text: String) -> Bool {
+        // PEM-armoured private keys are multi-line and contain spaces, so they have to
+        // be recognised before the single-token shape guard rejects them.
+        if isPEMPrivateKey(text) { return true }
+
+        // Anything this large can't trim down to a ≤128-character token (it would need
+        // over 1.5 KB of surrounding whitespace). Bail before the per-character scans:
+        // `AppState.applySearch` runs this over every item on every keystroke, and the
+        // history can hold multi-megabyte text.
+        guard text.utf8.count <= 2_048 else { return false }
+
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Must be single-line, no spaces, reasonable length
@@ -84,8 +132,6 @@ final class ClipboardItem {
         let length = trimmed.count
         guard length >= 8, length <= 128, isSingleLine, hasNoSpaces else { return false }
 
-        // Known secret prefixes — always sensitive
-        let secretPrefixes = ["sk-", "pk-", "ghp_", "gho_", "ghs_", "xoxb-", "xoxp-", "eyJ", "AKIA"]
         if secretPrefixes.contains(where: { trimmed.hasPrefix($0) }) { return true }
 
         // Exclude common non-password patterns
@@ -103,19 +149,30 @@ final class ClipboardItem {
         let hasUpper = trimmed.contains(where: { $0.isUppercase })
         let hasLower = trimmed.contains(where: { $0.isLowercase })
         let hasDigit = trimmed.contains(where: { $0.isNumber })
-        let hasSymbol = trimmed.contains(where: { "!@#$%^&*()_+-=[]{}|;:',.<>?/~`\"\\".contains($0) })
+        let hasSymbol = trimmed.contains(where: { symbolCharacters.contains($0) })
         let classCount = [hasUpper, hasLower, hasDigit, hasSymbol].filter { $0 }.count
 
         // Need all 4 classes, or 3 classes with high digit/symbol ratio (random-looking)
         if classCount >= 4 { return true }
         if classCount >= 3 {
             let digitCount = trimmed.filter { $0.isNumber }.count
-            let symbolCount = trimmed.filter { "!@#$%^&*()_+-=[]{}|;:',.<>?/~`\"\\".contains($0) }.count
+            let symbolCount = trimmed.filter { symbolCharacters.contains($0) }.count
             let randomRatio = Double(digitCount + symbolCount) / Double(length)
             return randomRatio >= 0.3
         }
 
         return false
+    }
+
+    /// `-----BEGIN … PRIVATE KEY-----` blocks: RSA/EC/OpenSSH keys and PGP
+    /// "PRIVATE KEY BLOCK"s. Certificates and public keys share the armour but not the
+    /// secrecy, which is why the match is on "PRIVATE KEY" rather than "-----BEGIN".
+    /// The byte bound keeps the trim off multi-megabyte text; even an 8192-bit RSA key
+    /// or a PGP block with subkeys stays far below it.
+    private static func isPEMPrivateKey(_ text: String) -> Bool {
+        guard text.utf8.count <= 16_384 else { return false }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("-----BEGIN ") && trimmed.contains("PRIVATE KEY")
     }
 
     // MARK: - Hash Generation
