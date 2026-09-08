@@ -4,7 +4,12 @@
 PROJECT      := Clipwise.xcodeproj
 SCHEME       := Clipwise
 DERIVED_DATA := build
-VERSION      := $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Clipwise/Info.plist 2>/dev/null || echo 1.0.0)
+# Accept only a dotted-numeric version: this value is interpolated into the
+# hdiutil command line in `dmg`, so a crafted version string would otherwise be
+# run as shell. The whole-line match also rejects PlistBuddy's failure notice,
+# which it prints to stdout ("File Doesn't Exist, Will Create: ...") while
+# exiting non-zero, so anything unparseable falls back to 1.0.0.
+VERSION      := $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Clipwise/Info.plist 2>/dev/null | grep -m1 -Ex '[0-9]+(\.[0-9]+)*' || echo 1.0.0)
 
 # Ad-hoc signing keeps local builds working without an Apple Developer team.
 SIGN_FLAGS := CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
@@ -47,7 +52,7 @@ dmg: release
 	cp -R $(RELEASE_APP) $(DERIVED_DATA)/dmg/
 	ln -s /Applications $(DERIVED_DATA)/dmg/Applications
 	hdiutil create -volname "Clipwise" -srcfolder $(DERIVED_DATA)/dmg -ov -format UDZO \
-		release/Clipwise-$(VERSION).dmg
+		"release/Clipwise-$(VERSION).dmg"
 
 clean:
 	rm -rf $(DERIVED_DATA)
