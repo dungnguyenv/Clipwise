@@ -156,4 +156,72 @@ final class ClipboardItem {
         }
         return "Unknown"
     }
+
+    // MARK: - Editing
+
+    /// Images are editable outright. Everything else is editable when it has a plain-text
+    /// representation to edit — except file items, which are never editable regardless of
+    /// what else they carry: a file's "text" is just its path (see `fileURLs`), and a
+    /// plain-text-encoded copy of that path isn't editable content either.
+    ///
+    /// This deliberately does not require `primaryType == .text`: content copied from a
+    /// browser, Pages, Word, or Notes carries HTML or RTF alongside plain text, and
+    /// `primaryType` reports whichever of those ranks highest — never `.text` when either
+    /// is present. Gating on `primaryType == .text` would make most real-world rich text
+    /// impossible to open in the editor, even though `EditorSession` opens it in `.text`
+    /// mode (converting to plain text on save, which is exactly what `TextEditorPane`'s
+    /// rich-text warning banner exists to flag before it happens).
+    ///
+    /// The file exclusion is checked directly against `contents` (`isFileItem`) rather
+    /// than inferred from `primaryType != .fileURL`. `ContentType.displayPriority` — the
+    /// thing that currently makes `.fileURL` outrank every other type in `primaryType` —
+    /// is documented as a *display* preference, not an editability rule; deriving
+    /// editability from it would make this silently wrong if that ranking is ever
+    /// reordered for a display-only reason.
+    var isEditable: Bool {
+        Self.isEditable(primaryType: primaryType, isFileItem: isFileItem, hasPlainText: plainText != nil)
+    }
+
+    /// Pure decision behind `isEditable`, over the three inputs it actually depends on.
+    /// `isEditable` itself can never exercise the `isFileItem == true` /
+    /// `primaryType == .image` combination against a real `ClipboardItem`:
+    /// `ContentType.displayPriority` currently ranks `.fileURL` above every other case,
+    /// so any item that is a file item also has `primaryType == .fileURL`, never
+    /// `.image` — that combination of inputs is simply unreachable through `contents`.
+    /// Exposed as a static function precisely so a test can supply that unreachable
+    /// combination directly and pin that the file guard runs first regardless — the
+    /// thing no test built from a real item can demonstrate, because every real item
+    /// that could reach the `primaryType == .image` branch already has `isFileItem ==
+    /// false` by construction.
+    static func isEditable(primaryType: ContentType, isFileItem: Bool, hasPlainText: Bool) -> Bool {
+        guard !isFileItem else { return false }
+        if primaryType == .image { return true }
+        return hasPlainText
+    }
+
+    /// True when the item carries a file-URL representation. Kept separate from
+    /// `primaryType` so `isEditable`'s file exclusion doesn't depend on
+    /// `ContentType.displayPriority` ordering — see `isEditable`'s doc comment.
+    private var isFileItem: Bool {
+        contents.contains { $0.type == UTType.fileURL.identifier }
+    }
+
+    /// Hash for content assembled by the editor rather than read from a pasteboard.
+    /// Same SHA256-hex format as `generateHash(from: [NSPasteboardItem])`.
+    static func generateHash(from representations: [(type: String, data: Data)]) -> String {
+        var hasher = SHA256()
+        for representation in representations {
+            hasher.update(data: representation.data)
+        }
+        let digest = hasher.finalize()
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Title rule shared by capture and editing: first non-empty line, capped.
+    static func generateTitle(forText text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Unknown" }
+        let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
+        return String(firstLine.prefix(Constants.maxTitleLength))
+    }
 }

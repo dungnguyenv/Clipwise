@@ -7,13 +7,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var floatingPanel: FloatingPanel!
     private var settingsWindow: NSWindow?
+    private var editorWindowController: EditorWindowController!
     var appState: AppState!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Unit tests host inside this app. Booting the status item, hotkeys and
+        // clipboard poll during a test run is both pointless and disruptive.
+        guard NSClassFromString("XCTestCase") == nil else { return }
+
         appState = AppState()
 
         appState.onDismissPanel = { [weak self] in
             self?.hidePanel()
+        }
+
+        editorWindowController = EditorWindowController(appState: appState)
+        appState.onOpenEditor = { [weak self] item in
+            guard let self else { return }
+            // FloatingPanel dismisses itself on resignKey, so hide it first and
+            // let the teardown finish — same sequence as opening Settings.
+            self.hidePanel()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                self.editorWindowController.open(item)
+            }
         }
 
         setupStatusItem()
@@ -22,6 +38,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startClipboardMonitor()
         configureDockIcon()
         checkAccessibility()
+    }
+
+    /// Only nil under XCTest, where `applicationDidFinishLaunching` returns before
+    /// wiring anything up — no editor can exist, so quitting proceeds. With no dirty
+    /// editor open `confirmTerminate()` returns true immediately, so the common quit
+    /// shows no prompt.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        editorWindowController?.confirmTerminate() == false ? .terminateCancel : .terminateNow
     }
 
     // MARK: - Status Item
@@ -68,6 +92,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         floatingPanel.onDismiss = { [weak self] in
             self?.appState.isPanelVisible = false
             self?.appState.searchQuery = ""
+        }
+
+        floatingPanel.onEdit = { [weak self] in
+            guard let self else { return }
+            self.appState.editItem(at: self.appState.selectedIndex)
         }
     }
 

@@ -6,18 +6,24 @@ final class StorageManager {
     let container: ModelContainer
     var context: ModelContext { container.mainContext }
 
-    init() {
+    init(inMemory: Bool = false) {
         let schema = Schema([ClipboardItem.self, ClipboardItemContent.self])
         let config = ModelConfiguration(
             "Clipwise",
             schema: schema,
-            isStoredInMemoryOnly: false,
+            isStoredInMemoryOnly: inMemory,
             allowsSave: true
         )
 
         do {
             container = try ModelContainer(for: schema, configurations: config)
         } catch {
+            // Never delete real on-disk history to recover an in-memory store — there is
+            // nothing on disk to be corrupted in the first place, so a failure here is a
+            // genuine bug, not the "stale schema" case this recovery exists for.
+            guard !inMemory else {
+                fatalError("[Clipwise] Failed to create in-memory ModelContainer: \(error)")
+            }
             NSLog("[Clipwise] ModelContainer failed: \(error). Deleting old store and retrying...")
             Self.deleteExistingStore(name: "Clipwise")
             do {

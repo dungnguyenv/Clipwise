@@ -43,3 +43,26 @@ targets:
         NSAppleEventsUsageDescription: "Clipwise needs permission to paste content into other applications."
         CFBundleDisplayName: Clipwise
         CFBundleName: Clipwise
+
+  ClipwiseTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Clipwise
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "5.9"
+
+schemes:
+  Clipwise:
+    build:
+      targets:
+        Clipwise: all
+        ClipwiseTests: [test]
+    test:
+      targets:
+        - ClipwiseTests

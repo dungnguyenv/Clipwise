@@ -24,7 +24,8 @@ hdiutil create -volname "Clipwise" -srcfolder <release-app-folder> -ov -format U
 
 No SPM dependencies — the project uses only Apple system frameworks.
 
-No test targets exist yet.
+Unit tests live in the `ClipwiseTests` target (`Tests/`, declared in `project.yml`).
+Run them with `make test`, which regenerates the project first.
 
 ## SwiftData Gotchas
 
@@ -77,6 +78,85 @@ Duplicates detected via SHA256 hash of all pasteboard data — updates `lastCopi
 ### Preview Popover
 
 Each clipboard row has a `.popover(arrowEdge: .trailing)` that shows when the item is hovered or selected. Only one popover is visible at a time — controlled by `AppState.previewItem` (computed: hover takes priority over selection). The popover is attached per-row so it follows the item's vertical position. Max height capped at 1/3 screen height.
+
+### Item Editor
+
+An item is editable when its primary type is `.image`, or it has a plain-text
+representation and is not a file item (`ClipboardItem.isEditable`). This is
+deliberately **not** `primaryType == .text` — `ContentType.displayPriority`
+ranks rtf and html above text, so anything copied from a browser, Pages, or
+Word reports a primary type of `.html` or `.rtf` and would never have shown a
+pencil under that check. `EditorSession` opens such items in `.text` mode,
+converting to plain text on save; the rich-text warning banner (below) is what
+flags that conversion before it happens.
+
+Entry points: a pencil button that appears on row hover/selection, a
+context-menu `Edit` entry, and `Cmd+E` on the selected row. The first two go
+through `AppState.editItem(at:)` → `AppState.onOpenEditor` →
+`EditorWindowController`. `Cmd+E` is handled in
+`FloatingPanel.performKeyEquivalent(_:)`, not in `SearchFieldView`'s text
+field — the app installs no custom `NSMenu`, so ⌘E is claimed by the default
+Edit menu's "Use Selection for Find" and dispatched through the key-equivalent
+path before an ordinary field key handler would see it. Overriding
+`performKeyEquivalent` on the panel wins regardless of whether AppKit checks
+the key window or the menu first.
+
+The editor opens in its own resizable `NSWindow`, not in the panel —
+`FloatingPanel` dismisses itself on `resignKey`, so `AppDelegate` hides the panel
+and opens the window 0.15s later, the same sequence used for Settings.
+
+`EditorSession` is the shared state between the views and the window; the window
+reads `hasUnsavedChanges` in `windowShouldClose` to decide whether to prompt.
+`EditorWindowController` has two distinct close paths and they must stay
+distinct: the post-save path (`onFinished`) nils the window's delegate before
+calling `close()`, skipping `windowShouldClose` entirely, because
+`EditorSession` never refreshes its "original" snapshot after a save and would
+otherwise report unsaved changes immediately after a successful one; the
+cancel/Esc path (`onCancel`) calls `performClose(_:)`, which does consult
+`windowShouldClose`.
+
+Quitting is a third path and reaches neither of those. AppKit only asks
+`windowShouldClose` when a *window* is closed, and does not walk the windows on
+termination unless the app is document-based — Clipwise isn't. So
+`AppDelegate.applicationShouldTerminate` calls
+`EditorWindowController.confirmTerminate()`, which runs the same prompt for each
+dirty editor and returns `.terminateCancel` if any is cancelled. This covers ⌘Q
+and the Settings "Quit" button, which calls `NSApp.terminate(nil)` directly. All
+three paths share one `confirmDiscarding(_:)` — add a fourth way to close an
+editor and it must go through that too, or edits vanish silently.
+
+**Image editing is vector-based.** `ImageEditorDocument` holds the base `NSImage`
+plus an array of `ImageAnnotation` values in **image-pixel space with a top-left
+origin** — never view coordinates, which is what keeps annotations locked to the
+image when the window resizes. `AnnotationRenderer.draw` is called by both the
+live `Canvas` and the `ImageRenderer`-based `flatten`, so preview and saved
+output cannot diverge. Undo/redo is snapshot push/pop, capped at 30.
+
+Geometric transforms (crop/rotate/flip/resize) flatten annotations into the base
+image first — so after a crop you can no longer undo individual strokes, only the
+whole transform step.
+
+**Saving text discards RTF/HTML representations.** `PasteService` replays every
+stored representation, so keeping a stale RTF blob would paste the pre-edit
+content into Pages or Word. The editor shows a warning banner when this
+applies. The banner's trigger is an explicit set of rich-text types matched by
+**conformance** — rtf, rtfd, flatRTFD, html, webArchive — not a check against
+`.rtf`/`.html` conformance alone: RTFD and web-archive content conforms to
+neither, so that narrower check silently missed TextEdit and Notes copies that
+carry attachments. Inverting the test instead (warn on anything that fails to
+conform to `.plainText`) was also tried and rejected — it fired on every plain
+URL/vCard copy. Keep the explicit set; don't "simplify" it back to either
+alternative.
+
+Two SDK quirks worth knowing before touching the renderer or its tests:
+- `NSBitmapImageRep.setColor` zeroes pixels when handed `NSColor.white` or
+  `.black` on this SDK. Every test fixture in this project builds colours with
+  `NSColor(deviceRed:green:blue:alpha:)` for that reason.
+- The highlighter's `blendMode = .multiply` must be set on the *outer* graphics
+  context, not inside a `drawLayer` callback. A layer starts with a fresh,
+  transparent backdrop, so setting the blend mode inside it multiplies against
+  nothing — a no-op that silently reduced the highlighter to a plain
+  35%-alpha stroke and went unnoticed through five review passes.
 
 ### Password Detection
 

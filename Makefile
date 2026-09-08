@@ -17,7 +17,7 @@ SIGN_FLAGS := CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 DEBUG_APP   := $(DERIVED_DATA)/Build/Products/Debug/Clipwise.app
 RELEASE_APP := $(DERIVED_DATA)/Build/Products/Release/Clipwise.app
 
-.PHONY: doctor generate build release run dmg clean
+.PHONY: doctor generate build release test run dmg clean
 
 ## Verify the toolchain is set up correctly
 doctor:
@@ -39,6 +39,11 @@ build: generate
 release: generate
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release \
 		-derivedDataPath $(DERIVED_DATA) $(SIGN_FLAGS) build
+
+## Run the unit test bundle
+test: generate
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=macOS' \
+		-derivedDataPath $(DERIVED_DATA) $(SIGN_FLAGS) test
 
 ## Build and launch. Never use Xcode's Run button when testing paste —
 ## it re-signs the binary and macOS revokes the Accessibility grant.

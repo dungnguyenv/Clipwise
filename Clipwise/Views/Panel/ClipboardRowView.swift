@@ -4,6 +4,7 @@ struct ClipboardRowView: View {
     let item: ClipboardItem
     let isSelected: Bool
     let isHovering: Bool
+    var onEdit: (() -> Void)?
 
     @AppStorage(Constants.hidePasswordsKey) private var hidePasswords = true
 
@@ -46,6 +47,26 @@ struct ClipboardRowView: View {
             }
 
             Spacer()
+
+            if item.isEditable, isSelected || isHovering {
+                Button {
+                    onEdit?()
+                } label: {
+                    // The glyph itself renders at 13pt, unchanged; the frame + explicit
+                    // content shape below only widen the *hit target* around it. Without
+                    // this, a near-miss click falls through to the row's onTapGesture and
+                    // pastes into the frontmost app — the most startling near-miss outcome
+                    // anywhere in this UI, so the pencil gets a comfortably larger target
+                    // than its glyph.
+                    Image(systemName: "pencil.circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(isSelected ? .white.opacity(0.9) : .secondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Edit")
+            }
 
             if item.isPinned {
                 Image(systemName: "pin.fill")
