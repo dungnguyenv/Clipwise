@@ -24,7 +24,8 @@ hdiutil create -volname "Clipwise" -srcfolder <release-app-folder> -ov -format U
 
 No SPM dependencies — the project uses only Apple system frameworks.
 
-No test targets exist yet.
+Unit tests live in the `ClipwiseTests` target (`Tests/`, declared in `project.yml`).
+Run them with `make test`, which regenerates the project first.
 
 ## SwiftData Gotchas
 
