@@ -43,15 +43,19 @@ struct ClipboardListView: View {
                                 appState.pasteService.writeToPasteboard(item)
                             }
                         }
-                        .popover(
-                            isPresented: Binding(
-                                get: { isPreviewTarget },
-                                set: { _ in }
-                            ),
-                            arrowEdge: .trailing
-                        ) {
-                            PreviewPopoverView(item: item)
-                                .frame(width: 300)
+                        // Not `.popover` — that one is transient and swallows the first
+                        // click on every row. See `PreviewPopoverAnchor`.
+                        .overlay {
+                            PreviewPopoverAnchor(
+                                // `isPanelVisible` is part of the condition because
+                                // `hidePanel()` leaves `hoveredItemID` set and
+                                // `previewItem` falls back to the selected row, so this
+                                // is never nil on its own — and an .applicationDefined
+                                // popover has nothing else to close it.
+                                isPresented: isPreviewTarget && appState.isPanelVisible,
+                                item: item
+                            )
+                            .allowsHitTesting(false)
                         }
 
                         if index < appState.filteredItems.count - 1 {
