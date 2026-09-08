@@ -115,6 +115,16 @@ otherwise report unsaved changes immediately after a successful one; the
 cancel/Esc path (`onCancel`) calls `performClose(_:)`, which does consult
 `windowShouldClose`.
 
+Quitting is a third path and reaches neither of those. AppKit only asks
+`windowShouldClose` when a *window* is closed, and does not walk the windows on
+termination unless the app is document-based — Clipwise isn't. So
+`AppDelegate.applicationShouldTerminate` calls
+`EditorWindowController.confirmTerminate()`, which runs the same prompt for each
+dirty editor and returns `.terminateCancel` if any is cancelled. This covers ⌘Q
+and the Settings "Quit" button, which calls `NSApp.terminate(nil)` directly. All
+three paths share one `confirmDiscarding(_:)` — add a fourth way to close an
+editor and it must go through that too, or edits vanish silently.
+
 **Image editing is vector-based.** `ImageEditorDocument` holds the base `NSImage`
 plus an array of `ImageAnnotation` values in **image-pixel space with a top-left
 origin** — never view coordinates, which is what keeps annotations locked to the

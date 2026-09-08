@@ -73,16 +73,66 @@ final class EditorWindowController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// Runs the unsaved-changes prompt for every open editor before the app quits.
+    /// Returns `false` to abort the quit.
+    ///
+    /// AppKit only consults `windowShouldClose` when a *window* is asked to close; it
+    /// does not walk the windows during termination unless the app is document-based,
+    /// which Clipwise is not. So without this, ⌘Q — and the Settings "Quit" button,
+    /// which calls `NSApp.terminate(nil)` directly — would discard in-progress edits
+    /// with no prompt at all.
+    ///
+    /// Each dirty editor is brought to the front before its own prompt, so with several
+    /// open the user can see which item they are being asked about. Cancelling any one
+    /// of them stops the quit and leaves every remaining window open.
+    ///
+    /// Known wart, accepted: an editor already saved by an earlier prompt in the same
+    /// pass will prompt again on the next ⌘Q, because `EditorSession` deliberately never
+    /// clears `hasUnsavedChanges` after a save — the invariant `forceClose` depends on,
+    /// pinned by two tests in `EditorSessionTests`. Making a save settle that flag is the
+    /// real fix and it belongs with that design, not here.
+    func confirmTerminate() -> Bool {
+        // Snapshot before prompting: `confirmDiscarding` can save, and a save runs
+        // `appState.loadItems()`, so nothing here may hold a live view into `entries`.
+        let dirty = entries.values.filter { $0.session.hasUnsavedChanges }
+        guard !dirty.isEmpty else { return true }
+
+        NSApp.activate(ignoringOtherApps: true)
+        for entry in dirty {
+            entry.window.makeKeyAndOrderFront(nil)
+            guard confirmDiscarding(entry.session) else { return false }
+        }
+        return true
+    }
+
     // MARK: - NSWindowDelegate
 
     /// Runs only for the `onCancel` close path (`window.performClose(nil)`, including
     /// Esc) — the `onFinished` path in `open(_:)` calls `forceClose`, which nils
     /// `delegate` before `close()` specifically so this never runs after a successful
     /// save. See `forceClose`'s doc comment for why that split exists.
+    ///
+    /// Quitting does NOT reach here — see `confirmTerminate()`.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard let session = entries.values.first(where: { $0.window === sender })?.session else {
             return true
         }
+        return confirmDiscarding(session)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        entries = entries.filter { $0.value.window !== window }
+    }
+
+    // MARK: - Private
+
+    /// The four-way unsaved-changes prompt, shared by the window-close and quit paths.
+    /// Returns `true` when the caller may proceed (nothing to save, saved successfully,
+    /// or explicitly discarded) and `false` to abort — either because the user cancelled
+    /// or because the save failed, in which case `session.errorMessage` is set and
+    /// `EditorRootView`'s alert surfaces the reason.
+    private func confirmDiscarding(_ session: EditorSession) -> Bool {
         guard session.hasUnsavedChanges else { return true }
 
         let alert = NSAlert()
@@ -109,13 +159,6 @@ final class EditorWindowController: NSObject, NSWindowDelegate {
             return false
         }
     }
-
-    func windowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow else { return }
-        entries = entries.filter { $0.value.window !== window }
-    }
-
-    // MARK: - Private
 
     private func presentCannotOpenAlert() {
         // `runModal()` is app-modal and blocks the run loop until dismissed. Clipwise is

@@ -40,6 +40,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         checkAccessibility()
     }
 
+    /// Only nil under XCTest, where `applicationDidFinishLaunching` returns before
+    /// wiring anything up — no editor can exist, so quitting proceeds. With no dirty
+    /// editor open `confirmTerminate()` returns true immediately, so the common quit
+    /// shows no prompt.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        editorWindowController?.confirmTerminate() == false ? .terminateCancel : .terminateNow
+    }
+
     // MARK: - Status Item
 
     private func setupStatusItem() {
