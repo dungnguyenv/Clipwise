@@ -22,7 +22,7 @@ A lightweight, native macOS clipboard manager — inspired by [Maccy](https://ma
 
 ## Installation
 
-1. Download `Clipwise-1.0.0.dmg` from [Releases](./release/)
+1. Download `Clipwise-1.0.0.dmg` from [Releases](https://github.com/dungnguyenv/Clipwise/releases)
 2. Open the DMG and drag **Clipwise** to **Applications**
 3. Launch Clipwise — it appears as a clipboard icon in the menu bar
 4. Grant **Accessibility** permission when prompted (System Settings → Privacy & Security → Accessibility)
@@ -63,4 +63,4 @@ make dmg       # package release/Clipwise-<version>.dmg
 
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 Dũng Nguyễn

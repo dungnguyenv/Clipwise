@@ -9,7 +9,7 @@ build/
 DerivedData/
 
 # Release artifacts
-release/*.dmg
+release/
 
 # macOS
 .DS_Store
