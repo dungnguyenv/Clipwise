@@ -117,22 +117,34 @@ final class StorageManager {
 
     // MARK: - History Limit
 
+    /// Trims unpinned history down to `limit`, oldest first. Pinned items are exempt
+    /// and are not counted against the limit.
+    ///
+    /// Runs after *every* clipboard capture, which is why it counts before it fetches.
+    /// Materialising the whole table just to evaluate `count - limit` made the cost of
+    /// each copy scale with the user's history size, and the steady state — already at
+    /// the limit, one new item arrives — then paid for hundreds of hydrated objects in
+    /// order to delete exactly one. `fetchCount` answers that question without building
+    /// any, so the subsequent fetch is bounded by the excess rather than the history.
     func enforceHistoryLimit(_ limit: Int) {
-        let descriptor = FetchDescriptor<ClipboardItem>(
+        var descriptor = FetchDescriptor<ClipboardItem>(
             predicate: #Predicate { !$0.isPinned },
             sortBy: [SortDescriptor(\.lastCopiedAt, order: .forward)]
         )
-        guard let all = try? context.fetch(descriptor) else { return }
-        let excess = all.count - limit
-        if excess > 0 {
-            for item in all.prefix(excess) {
-                context.delete(item)
-            }
-            do {
-                try context.save()
-            } catch {
-                NSLog("[Clipwise] Failed to enforce history limit: \(error)")
-            }
+        guard let total = try? context.fetchCount(descriptor) else { return }
+        let excess = total - limit
+        guard excess > 0 else { return }
+
+        // Ascending sort + fetchLimit selects precisely the `excess` oldest items.
+        descriptor.fetchLimit = excess
+        guard let expired = try? context.fetch(descriptor) else { return }
+        for item in expired {
+            context.delete(item)
+        }
+        do {
+            try context.save()
+        } catch {
+            NSLog("[Clipwise] Failed to enforce history limit: \(error)")
         }
     }
 
