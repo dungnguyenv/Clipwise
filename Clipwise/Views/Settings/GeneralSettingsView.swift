@@ -6,6 +6,11 @@ struct GeneralSettingsView: View {
     @AppStorage(Constants.playSoundOnPasteKey) private var playSoundOnPaste = false
     @AppStorage(Constants.hidePasswordsKey) private var hidePasswords = true
     @State private var launchAtLogin = false
+    /// The value we last handed to (or read from) the service. `.onChange` also
+    /// observes our own rollback write, and this lets us tell that apart from a
+    /// real user toggle without consulting the system status — which disagrees
+    /// with the user's intent exactly when it matters (see the toggle handler).
+    @State private var appliedLaunchAtLogin = false
 
     var body: some View {
         Form {
@@ -55,13 +60,20 @@ struct GeneralSettingsView: View {
         .padding()
         .onAppear {
             launchAtLogin = LaunchAtLoginService.isEnabled
+            appliedLaunchAtLogin = launchAtLogin
         }
         .onChange(of: launchAtLogin) { _, newValue in
-            guard newValue != LaunchAtLoginService.isEnabled else { return }
+            // Comparing against the system status here would swallow a real
+            // toggle whenever the two disagree: after register() lands in
+            // .requiresApproval, isEnabled stays false while the switch reads
+            // on, so switching it back off never reached unregister().
+            guard newValue != appliedLaunchAtLogin else { return }
             do {
                 try LaunchAtLoginService.setEnabled(newValue)
+                appliedLaunchAtLogin = newValue
             } catch {
-                launchAtLogin = LaunchAtLoginService.isEnabled
+                appliedLaunchAtLogin = LaunchAtLoginService.isEnabled
+                launchAtLogin = appliedLaunchAtLogin
             }
         }
     }
