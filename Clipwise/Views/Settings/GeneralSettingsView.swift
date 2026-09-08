@@ -29,6 +29,10 @@ struct GeneralSettingsView: View {
                         Text("50").tag(50)
                         Text("100").tag(100)
                         Text("200").tag(200)
+                        Text("300").tag(300)
+                        Text("500").tag(500)
+                        Text("700").tag(700)
+                        Text("1000").tag(1000)
                     }
                     .frame(width: 100)
                 }
