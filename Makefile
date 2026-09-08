@@ -4,12 +4,13 @@
 PROJECT      := Clipwise.xcodeproj
 SCHEME       := Clipwise
 DERIVED_DATA := build
-# Accept only a dotted-numeric version: this value is interpolated into the
-# hdiutil command line in `dmg`, so a crafted version string would otherwise be
-# run as shell. The whole-line match also rejects PlistBuddy's failure notice,
-# which it prints to stdout ("File Doesn't Exist, Will Create: ...") while
-# exiting non-zero, so anything unparseable falls back to 1.0.0.
-VERSION      := $(shell /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Clipwise/Info.plist 2>/dev/null | grep -m1 -Ex '[0-9]+(\.[0-9]+)*' || echo 1.0.0)
+# Read the version from project.yml: xcodegen regenerates Clipwise/Info.plist
+# from that file on every `generate` and always writes its default "1.0" there,
+# while the built app reports MARKETING_VERSION. Accept only a dotted-numeric
+# version: this value is interpolated into the hdiutil command line in `dmg`,
+# so a crafted string would otherwise be run as shell. Anything unparseable
+# falls back to 1.0.0.
+VERSION      := $(shell grep -m1 -E '^[[:space:]]*MARKETING_VERSION:' project.yml | tr -d '" ' | cut -d: -f2 | grep -m1 -Ex '[0-9]+(\.[0-9]+)*' || echo 1.0.0)
 
 # Ad-hoc signing keeps local builds working without an Apple Developer team.
 SIGN_FLAGS := CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
@@ -53,7 +54,7 @@ run: build
 
 ## Package the Release build as a DMG
 dmg: release
-	@rm -rf $(DERIVED_DATA)/dmg && mkdir -p $(DERIVED_DATA)/dmg
+	@rm -rf $(DERIVED_DATA)/dmg && mkdir -p $(DERIVED_DATA)/dmg release
 	cp -R $(RELEASE_APP) $(DERIVED_DATA)/dmg/
 	ln -s /Applications $(DERIVED_DATA)/dmg/Applications
 	hdiutil create -volname "Clipwise" -srcfolder $(DERIVED_DATA)/dmg -ov -format UDZO \
