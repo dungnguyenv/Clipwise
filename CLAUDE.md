@@ -160,5 +160,7 @@ Two SDK quirks worth knowing before touching the renderer or its tests:
 
 ### Password Detection
 
-`ClipboardItem.looksLikePassword` uses heuristics: single-line, no spaces, 8-128 chars, 3+ character classes (upper/lower/digit/symbol), or known API key prefixes (`sk-`, `ghp_`, `eyJ`, etc.). Sensitive items show `••••••••` in the UI but can still be pasted.
-Password detection excludes URLs, emails, file paths, and domains to avoid false positives. Controlled by `hidePasswords` UserDefaults toggle.
+`ClipboardItem.looksLikePassword(_:)` (static and pure, pinned by `PasswordDetectionTests`) uses heuristics: single-line, no spaces, 8-128 chars, 3+ character classes (upper/lower/digit/symbol), known API key prefixes (`sk-`, `ghp_`, `glpat-`, `eyJ`, etc.), or a PEM `-----BEGIN … PRIVATE KEY` block — the one multi-line case, checked before the shape guard. The instance property feeds it the item's plain text. Sensitive items show `••••••••` in the list and "Sensitive content hidden" in the preview popover (the popover also drops its char count, which would leak the length), but can still be pasted.
+Password detection excludes URLs, emails, file paths, and domains to avoid false positives. Controlled by the `hidePasswords` UserDefaults toggle.
+
+While the toggle is on, concealed items are also **excluded from search results** (`AppState.searchableItems`): `SearchEngine` matches the real title, so a masked row that survives each keystroke would confirm the secret one character at a time. The item editor is deliberately *not* gated — per the item-editor spec, a sensitive item opens in the editor showing its real text.

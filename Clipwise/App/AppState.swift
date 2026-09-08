@@ -73,12 +73,24 @@ final class AppState {
                 return lhs.lastCopiedAt > rhs.lastCopiedAt
             }
         } else {
-            let results = searchEngine.search(query: searchQuery, in: items, mode: mode)
+            let hidePasswords = UserDefaults.standard.bool(forKey: Constants.hidePasswordsKey)
+            let searchable = Self.searchableItems(items, hidePasswords: hidePasswords)
+            let results = searchEngine.search(query: searchQuery, in: searchable, mode: mode)
             filteredItems = results.map(\.item)
         }
 
         // Reset selection
         selectedIndex = 0
+    }
+
+    /// The items a non-empty search may match. While "Hide passwords & secrets" is on,
+    /// concealed items are left out entirely: the list shows them as `••••••••`, but
+    /// `SearchEngine` matches the real title, so letting them through would confirm a
+    /// hidden secret one character at a time by whether the masked row survives each
+    /// keystroke. They still appear in the unfiltered list, where the mask does its job.
+    static func searchableItems(_ items: [ClipboardItem], hidePasswords: Bool) -> [ClipboardItem] {
+        guard hidePasswords else { return items }
+        return items.filter { !$0.looksLikePassword }
     }
 
     var onDismissPanel: (() -> Void)?

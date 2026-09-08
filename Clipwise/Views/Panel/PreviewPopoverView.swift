@@ -5,6 +5,10 @@ struct PreviewPopoverView: View {
 
     @AppStorage(Constants.hidePasswordsKey) private var hidePasswords = true
 
+    private var isSensitive: Bool {
+        hidePasswords && item.looksLikePassword
+    }
+
     /// Max height = 1/3 of screen height
     private var maxHeight: CGFloat {
         let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
@@ -21,7 +25,9 @@ struct PreviewPopoverView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                if let text = item.plainText {
+                // The count is hidden with the content: a password's length is part of
+                // what the mask is meant to keep off the screen.
+                if !isSensitive, let text = item.plainText {
                     Text("\(text.count) chars")
                         .font(.system(size: 10))
                         .foregroundStyle(Color.secondary.opacity(0.6))
@@ -49,7 +55,7 @@ struct PreviewPopoverView: View {
 
     @ViewBuilder
     private var textPreview: some View {
-        if hidePasswords && item.looksLikePassword {
+        if isSensitive {
             HStack {
                 Image(systemName: "lock.fill")
                     .foregroundStyle(.orange)
